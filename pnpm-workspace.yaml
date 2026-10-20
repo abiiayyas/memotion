@@ -1,0 +1,7 @@
+packages:
+  - sidecar
+  - app
+allowBuilds:
+  esbuild: true
+  msedge-tts: true
+  sharp: true

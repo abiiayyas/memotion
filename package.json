@@ -1,0 +1,15 @@
+{
+  "name": "memotion",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "pnpm --filter app tauri dev",
+    "dev:sidecar": "pnpm --filter sidecar dev",
+    "dev:web": "pnpm --filter app dev",
+    "build": "pnpm --filter app build:release",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

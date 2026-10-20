@@ -1,0 +1,195 @@
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  CaptionRequest,
+  TtsRequest,
+  VoiceOption,
+  WordTiming,
+  AgentEvent,
+  EditOp,
+  EditResult,
+  FileVariables,
+  ChatItem,
+  Media,
+  Orientation,
+  Preset,
+  Project,
+  Provider,
+  Quality,
+  RenderJob,
+  TestResult,
+  TimelineView,
+  VariableValue,
+} from "./types";
+
+export interface Connection {
+  base: string;
+  token: string;
+}
+
+let conn: Connection | null = null;
+
+const inTauri = "__TAURI_INTERNALS__" in window;
+
+/**
+ * In the desktop shell the Rust side owns the sidecar and reports its port and token.
+ * In a plain browser (vite dev) pass `?sidecar=<port>&token=<token>` once; it is remembered for the session.
+ */
+export async function connect(): Promise<Connection> {
+  if (conn) return conn;
+  if (inTauri) {
+    const deadline = Date.now() + 40_000;
+    while (Date.now() < deadline) {
+      const info = await invoke<{ port: number; token: string } | null>("sidecar_info");
+      if (info) return (conn = { base: `http://127.0.0.1:${info.port}`, token: info.token });
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    throw new Error("The background service did not start within 40 s.");
+  }
+  const q = new URLSearchParams(location.search);
+  const port = q.get("sidecar") ?? sessionStorage.getItem("memotion.port");
+  const token = q.get("token") ?? sessionStorage.getItem("memotion.token");
+  if (!port || !token) throw new Error("Open with ?sidecar=<port>&token=<token> when running outside Tauri.");
+  sessionStorage.setItem("memotion.port", port);
+  sessionStorage.setItem("memotion.token", token);
+  return (conn = { base: `http://127.0.0.1:${port}`, token });
+}
+
+function auth(c: Connection): Record<string, string> {
+  return { Authorization: `Bearer ${c.token}` };
+}
+
+/** A failed request, keeping the machine-readable `code` some endpoints add (e.g. `local_unavailable`). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const c = await connect();
+  const res = await fetch(`${c.base}${path}`, {
+    method,
+    headers: { ...auth(c), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg =
+      data && typeof data === "object" && "error" in data
+        ? String(data.error)
+        : data && typeof data === "object" && "reason" in data
+          ? String(data.reason)
+          : `HTTP ${res.status}`;
+    const code = data && typeof data === "object" && "code" in data && typeof data.code === "string" ? data.code : undefined;
+    throw new ApiError(msg, res.status, code);
+  }
+  return data as T;
+}
+
+/** URL for an <img>/<video> src: the token rides in the query because those elements cannot send headers. */
+export async function rawUrl(projectId: string, path: string): Promise<string> {
+  const c = await connect();
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  return `${c.base}/projects/${projectId}/raw/${encoded}?token=${c.token}`;
+}
+
+/** Parse a fetch() SSE body into (event, data) pairs. EventSource cannot send the Authorization header. */
+async function* sse(res: Response): AsyncGenerator<{ event: string; data: string }> {
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buf += value;
+    let sep: number;
+    while ((sep = buf.indexOf("\n\n")) >= 0) {
+      const block = buf.slice(0, sep);
+      buf = buf.slice(sep + 2);
+      let event = "message";
+      const data: string[] = [];
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+      }
+      if (data.length) yield { event, data: data.join("\n") };
+    }
+  }
+}
+
+export const api = {
+  presets: () => request<Preset[]>("GET", "/presets"),
+  providers: () => request<{ providers: Provider[]; activeProviderId: string | null }>("GET", "/providers"),
+  saveProvider: (provider: Omit<Provider, "hasKey">, apiKey?: string) =>
+    request<Provider>("PUT", `/providers/${provider.id}`, { provider, apiKey }),
+  deleteProvider: (id: string) => request<{ ok: true }>("DELETE", `/providers/${id}`),
+  setActiveProvider: (id: string) => request<{ ok: true }>("POST", "/providers/active", { id }),
+  testProvider: (id: string) => request<TestResult>("POST", `/providers/${id}/test`),
+  models: (id: string) => request<{ models: string[] }>("GET", `/providers/${id}/models`),
+
+  projects: () => request<Project[]>("GET", "/projects"),
+  createProject: (name: string, orientation: Orientation, fps: 30 | 60) =>
+    request<Project>("POST", "/projects", { name, orientation, fps }),
+  renameProject: (id: string, name: string) => request<Project>("PATCH", `/projects/${id}`, { name }),
+  deleteProject: (id: string) => request<{ ok: true }>("DELETE", `/projects/${id}`),
+  media: (id: string) => request<Media[]>("GET", `/projects/${id}/media`),
+  importMedia: (id: string, paths: string[]) =>
+    request<{ imported: Media[]; failed: { path: string; error: string }[] }>("POST", `/projects/${id}/media`, { paths }),
+  preview: (id: string) => request<{ port: number; url: string }>("POST", `/projects/${id}/preview`),
+
+  timeline: (id: string) => request<TimelineView>("GET", `/projects/${id}/timeline`),
+  editTimeline: (id: string, op: EditOp) => request<EditResult>("POST", `/projects/${id}/timeline/edit`, op),
+  undoTimeline: (id: string, direction: "undo" | "redo") => request<EditResult>("POST", `/projects/${id}/timeline/${direction}`),
+  variables: (id: string) => request<FileVariables[]>("GET", `/projects/${id}/variables`),
+  setVariable: (id: string, file: string, variable: string, value: VariableValue) =>
+    request<EditResult>("PUT", `/projects/${id}/variables`, { file, id: variable, value }),
+
+  voices: () => request<{ voices: VoiceOption[] }>("GET", "/voices"),
+  generateSpeech: (projectId: string, tts: TtsRequest, caption?: CaptionRequest) =>
+    request<{ ok: boolean; audioPath: string; duration: number; words: WordTiming[]; captionsFile?: string; timingEstimated: boolean }>(
+      "POST",
+      `/projects/${projectId}/tts`,
+      { tts, caption },
+    ),
+  transcribeMedia: (projectId: string, mediaPath: string, caption?: CaptionRequest, opts: { language?: string; allowInstall?: boolean } = {}) =>
+    request<{ ok: boolean; captionsFile: string; duration: number; words: WordTiming[] }>(
+      "POST",
+      `/projects/${projectId}/transcribe`,
+      { mediaPath, caption, language: opts.language, allowInstall: opts.allowInstall },
+    ),
+
+  ttsKeys: () => request<{ openai: boolean; elevenlabs: boolean }>("GET", "/tts-keys"),
+  saveTtsKey: (vendor: "openai" | "elevenlabs", apiKey: string) => request<{ ok: true }>("PUT", `/tts-keys/${vendor}`, { apiKey }),
+  removeElevenLabsKey: () => request<{ ok: true }>("DELETE", "/tts-keys/elevenlabs"),
+
+  history: (id: string) => request<ChatItem[]>("GET", `/projects/${id}/chat`),
+  clearHistory: (id: string) => request<{ ok: true }>("DELETE", `/projects/${id}/chat`),
+  cancelChat: (id: string) => request<{ ok: true }>("POST", `/projects/${id}/chat/cancel`),
+
+  startRender: (id: string, opts: { quality: Quality; fps: 30 | 60 }) =>
+    request<RenderJob>("POST", `/projects/${id}/render`, opts),
+  cancelRender: (job: string) => request<{ ok: true }>("DELETE", `/renders/${job}`),
+};
+
+/** Send a chat message and yield agent events as they stream in. Aborting `signal` cancels the run. */
+export async function* chat(projectId: string, message: string, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+  const c = await connect();
+  const res = await fetch(`${c.base}/projects/${projectId}/chat`, {
+    method: "POST",
+    headers: { ...auth(c), "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+    signal,
+  });
+  for await (const { data } of sse(res)) yield JSON.parse(data) as AgentEvent;
+}
+
+export async function* renderProgress(jobId: string, signal: AbortSignal): AsyncGenerator<RenderJob> {
+  const c = await connect();
+  const res = await fetch(`${c.base}/renders/${jobId}/events`, { headers: auth(c), signal });
+  for await (const { data } of sse(res)) yield JSON.parse(data) as RenderJob;
+}

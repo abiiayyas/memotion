@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/node"],
+    "resources": {
+      "../../sidecar/bundle/": "sidecar/"
+    }
+  }
+}
