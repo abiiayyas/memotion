@@ -14,6 +14,15 @@ export function dataDir(): string {
   return join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "memotion");
 }
 
+let port = 0;
+/** The port this sidecar listens on, known once the server is up. Agent CLIs call back to it. */
+export function setSelfPort(p: number): void {
+  port = p;
+}
+export function selfPort(): number {
+  return port;
+}
+
 export function projectsDir(): string {
   const dir = join(dataDir(), "projects");
   mkdirSync(dir, { recursive: true });

@@ -7,6 +7,9 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { runAgent, loadHistory, clearHistory, isAgentRunning } from "./agent/loop.js";
+import { CLI_SPECS, detectClis } from "./agents/cli.js";
+import { registerMcpRoutes } from "./agents/mcp.js";
+import { runCliAgent } from "./agents/run.js";
 import { registerContentRoutes } from "./routes/content.js";
 import { ensurePreview, withFreshPreview } from "./engine/preview.js";
 import { EditOp, editTimeline, readTimeline, undoTimeline } from "./engine/timeline.js";
@@ -27,11 +30,14 @@ import {
 } from "./audio/index.js";
 import {
   deleteApiKey,
+  getAgentBackend,
   getApiKey,
   getProvider,
+  isAgentBackend,
   listProviders,
   removeProvider,
   setActiveProvider,
+  setAgentBackend,
   setApiKey,
   upsertProvider,
 } from "./providers/store.js";
@@ -114,6 +120,9 @@ export function buildApp(opts: ServerOptions): Hono {
     if (c.req.method === "OPTIONS") return next();
     const host = c.req.header("host") ?? "";
     if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host)) return c.json({ error: "bad host" }, 403);
+    // Agent CLIs reach /mcp/<run token> and the preview iframe reaches /pv/<token>/...; neither can send a header.
+    // Both carry their own credential in the path, which their handlers check.
+    if (c.req.path.startsWith("/mcp/") || c.req.path.startsWith("/pv/")) return next();
     const bearer = c.req.header("authorization")?.replace(/^Bearer /, "");
     // <img>/<video> cannot send headers: raw file reads (GET only) may pass the token in the query.
     const queryToken = c.req.method === "GET" && c.req.path.includes("/raw/") ? c.req.query("token") : undefined;
@@ -238,6 +247,19 @@ export function buildApp(opts: ServerOptions): Hono {
     chatAborts.get(c.req.param("id"))?.abort();
     return c.json({ ok: true });
   });
+  // Who writes the video: an API provider, or a coding-agent CLI found on this computer.
+  app.get("/agents", async (c) => c.json({ backend: getAgentBackend(), clis: await detectClis() }));
+  app.get("/agents/backend", (c) => c.json({ backend: getAgentBackend() }));
+  app.put("/agents/backend", async (c) => {
+    const { backend } = z.object({ backend: z.string().refine(isAgentBackend, "Unknown agent") }).parse(await c.req.json());
+    if (!isAgentBackend(backend)) return c.json({ error: "Unknown agent" }, 400);
+    if (backend !== "api") {
+      const cli = (await detectClis()).find((x) => x.id === backend);
+      if (!cli?.found) return c.json({ error: `${CLI_SPECS[backend].label} was not found on this computer.` }, 400);
+    }
+    setAgentBackend(backend);
+    return c.json({ backend });
+  });
   app.post("/projects/:id/chat", async (c) => {
     const id = c.req.param("id");
     await readMeta(id); // 404-ish early failure for unknown ids
@@ -247,7 +269,9 @@ export function buildApp(opts: ServerOptions): Hono {
     return streamSSE(c, async (stream) => {
       stream.onAbort(() => abort.abort());
       try {
-        for await (const ev of runAgent(id, message, abort.signal)) {
+        const backend = getAgentBackend();
+        const events = backend === "api" ? runAgent(id, message, abort.signal) : runCliAgent(id, message, abort.signal, backend);
+        for await (const ev of events) {
           await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
         }
       } finally {
@@ -386,6 +410,7 @@ export function buildApp(opts: ServerOptions): Hono {
   });
 
   registerContentRoutes(app);
+  registerMcpRoutes(app);
 
   return app;
 }

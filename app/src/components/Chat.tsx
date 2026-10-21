@@ -19,6 +19,7 @@ export function Chat({
   project,
   onFilesChanged,
   hasProvider,
+  agentLabel,
   openSettings,
   autoSend,
   onAutoSent,
@@ -26,6 +27,8 @@ export function Chat({
   project: Project;
   onFilesChanged: () => void;
   hasProvider: boolean;
+  /** Who is writing the video, shown in the header. */
+  agentLabel: string;
   openSettings: () => void;
   /** A message another panel wants sent (e.g. the Remotion conversion brief). Sent once, then cleared. */
   autoSend: string | null;
@@ -122,7 +125,7 @@ export function Chat({
   return (
     <div className="chat">
       <div className="chat-head">
-        <strong>Director</strong>
+        <strong>Director</strong> <small className="agent-tag">{agentLabel}</small>
         <button className="link" onClick={clear} disabled={busy || items.length === 0}>
           New conversation
         </button>

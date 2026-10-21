@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Preset, Provider, TestResult } from "../types";
+import { AgentPicker } from "./AgentPicker";
 
 interface Draft {
   id: string;
@@ -120,9 +121,11 @@ export function Settings({ onClose, onChanged }: { onClose: () => void; onChange
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
         <div className="modal-head">
-          <h2>AI providers</h2>
+          <h2>Director</h2>
           <button onClick={onClose} aria-label="Close">✕</button>
         </div>
+        <AgentPicker onChanged={onChanged} />
+        <h3 style={{ margin: "14px 0 6px", padding: "0 18px" }}>AI providers</h3>
         <div className="settings">
           <div className="providers">
             {providers.map((p) => (

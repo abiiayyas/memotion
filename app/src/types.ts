@@ -249,3 +249,23 @@ export interface AppSettings {
   /** Why image generation cannot run right now, or null when it can. */
   imageBlocker: string | null;
 }
+
+export type AgentBackend = "api" | "claude" | "codex" | "opencode";
+
+export interface CliInfo {
+  id: "claude" | "codex" | "opencode" | "agy";
+  label: string;
+  vendor: string;
+  found: boolean;
+  path?: string;
+  version?: string;
+  signedIn: boolean | null;
+  unsupported?: string;
+  install: string;
+  signInCommand: string;
+}
+
+export interface AgentsInfo {
+  backend: AgentBackend;
+  clis: CliInfo[];
+}

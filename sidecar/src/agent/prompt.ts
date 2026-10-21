@@ -12,14 +12,23 @@ export interface Brief {
  * The composition contract below is distilled from `hyperframes docs` (data-attributes, compositions, gsap)
  * and the CLI's lint rules at the pinned version. When the pin moves, re-read those docs and diff this text.
  */
-export function systemPrompt(meta: ProjectMeta, media: string[], brief: Brief = {}): string {
+/** For coding-agent CLIs: they have their own file tools, and Memotion's other tools arrive over MCP. */
+const CLI_NOTES = `
+
+# You are running as a coding agent inside the project folder
+- Your working directory is the project. Read and write files with your own file tools; the tool names above (list_files, read_file, write_file, edit_file) are not available to you. Never touch anything outside this folder.
+- Memotion's tools come from the MCP server named "memotion": check, snapshot, read_docs, list_media, generate_voiceover, transcribe_and_caption, capture_website, generate_image. Use check after every substantial change and fix its errors; this is how you verify the video. Do not look for a hyperframes command to run.
+- Do not start servers and do not render; the app renders when the user presses Export.
+- Finish with the short summary described above.`;
+
+export function systemPrompt(meta: ProjectMeta, media: string[], brief: Brief = {}, cli = false): string {
   const { width, height } = DIMENSIONS[meta.orientation];
   const safe =
     meta.orientation === "portrait"
       ? "Portrait feeds (Shorts/Reels/TikTok) cover the top ~12% and bottom ~20% with app UI: keep key text and faces inside the central 70% of the height."
       : "Keep key text inside the central 80% of the frame (title-safe).";
 
-  return `You are Memotion, an AI video director. You turn the user's prompt into a finished HTML motion video by writing and editing files in their project, then verifying the result.
+  const body = `You are Memotion, an AI video director. You turn the user's prompt into a finished HTML motion video by writing and editing files in their project, then verifying the result.
 
 # The format (HyperFrames)
 A video is an HTML composition rendered by seeking a paused GSAP timeline frame by frame, so everything visible must be a pure function of timeline time.
@@ -70,4 +79,5 @@ ${brief.brand ? `# Brand\n${brief.brand}\n` : ""}${brief.format ? `# Format: ${b
 8. Never invent facts about the user's business or product: prices, opening hours, phone numbers, addresses, ratings, claims, durations ("brewed 12 hours"), discounts. Use only what the user gave you or what a captured website contains. If a scene needs one that is missing, leave it out or write an obviously marked placeholder such as "Rp ___", and list every placeholder in your final summary.
 9. Do not render: the app renders when the user presses Export. Do not start servers.
 10. Finish with a short plain-language summary: what the video shows, its length, and anything that is a placeholder.`;
+  return cli ? `${body}${CLI_NOTES}` : body;
 }

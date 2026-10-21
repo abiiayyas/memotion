@@ -10,17 +10,35 @@ interface ConfigFile {
   activeProviderId: string | null;
   /** Master switch for paid image generation. Off until the user turns it on. */
   imageGeneration: boolean;
+  /** Who writes the video: the active API provider, or a coding-agent CLI installed on this computer. */
+  agentBackend: AgentBackend;
+}
+
+export type AgentBackend = "api" | "claude" | "codex" | "opencode";
+const BACKENDS: Record<AgentBackend, true> = { api: true, claude: true, codex: true, opencode: true };
+
+export function isAgentBackend(v: string): v is AgentBackend {
+  return v in BACKENDS;
 }
 
 function read(): ConfigFile {
   const path = configPath();
-  if (!existsSync(path)) return { providers: [], activeProviderId: null, imageGeneration: false };
+  if (!existsSync(path)) return { providers: [], activeProviderId: null, imageGeneration: false, agentBackend: "api" };
   const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<ConfigFile>;
   return {
     providers: (raw.providers ?? []).map((p) => ProviderInput.parse(p)),
     activeProviderId: raw.activeProviderId ?? null,
     imageGeneration: raw.imageGeneration === true,
+    agentBackend: raw.agentBackend && isAgentBackend(raw.agentBackend) ? raw.agentBackend : "api",
   };
+}
+
+export function getAgentBackend(): AgentBackend {
+  return read().agentBackend;
+}
+
+export function setAgentBackend(backend: AgentBackend): void {
+  write({ ...read(), agentBackend: backend });
 }
 
 export function isImageGenerationEnabled(): boolean {

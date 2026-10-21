@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   CaptionRequest,
   TtsRequest,
+  AgentBackend,
+  AgentsInfo,
   LocalTtsStatus,
   VoiceOption,
   WordTiming,
@@ -171,6 +173,9 @@ export const api = {
     request<EditResult>("PUT", `/projects/${id}/variables`, { file, id: variable, value }),
 
   voices: () => request<{ voices: VoiceOption[] }>("GET", "/voices"),
+  agents: () => request<AgentsInfo>("GET", "/agents"),
+  agentBackend: () => request<{ backend: AgentBackend }>("GET", "/agents/backend"),
+  setAgentBackend: (backend: AgentBackend) => request<{ backend: AgentBackend }>("PUT", "/agents/backend", { backend }),
   localTts: () => request<LocalTtsStatus>("GET", "/tts-local"),
   installLocalTts: (voice: string) => request<LocalTtsStatus & { ok: true }>("POST", "/tts-local/install", { voice }),
   generateSpeech: (projectId: string, tts: TtsRequest, caption?: CaptionRequest) =>

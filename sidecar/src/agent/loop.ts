@@ -27,12 +27,21 @@ const MAX_ROUNDS = 60;
 export const CHECK_REMINDER =
   "Automatic reminder: you changed files but did not run `check` afterwards. Run `check` now, fix every error it reports, then finish with your summary.";
 /** Paid images one user message may trigger. A confused or manipulated model must not be able to run up a bill. */
-const MAX_IMAGES_PER_TURN = 4;
+export const MAX_IMAGES_PER_TURN = 4;
 /** Tool output from earlier turns is cut to this when re-sent, to keep long sessions inside the context window. */
 const OLD_TOOL_CHARS = 2_000;
 const IMAGES_OMITTED = "[snapshot images omitted from history]";
 
 const running = new Set<string>();
+
+/** Take the project for one agent run. Null when another run already has it; otherwise the function that gives it back. */
+export function claimProject(projectId: string): (() => void) | null {
+  if (running.has(projectId)) return null;
+  running.add(projectId);
+  return () => {
+    running.delete(projectId);
+  };
+}
 
 /** Timeline edits are refused while the agent is writing the same files. */
 export function isAgentRunning(projectId: string): boolean {
@@ -65,6 +74,13 @@ async function saveHistory(projectId: string, messages: ChatCompletionMessagePar
   await rename(tmp, file);
 }
 
+/** One finished turn of a CLI agent, in the shape the chat view reads. The CLI keeps its own record of the work. */
+export async function recordTurn(projectId: string, userText: string, assistantText: string): Promise<void> {
+  const messages = await loadHistory(projectId);
+  messages.push({ role: "user", content: userText }, { role: "assistant", content: assistantText || "(no reply)" });
+  await saveHistory(projectId, messages);
+}
+
 export async function clearHistory(projectId: string): Promise<void> {
   await saveHistory(projectId, []);
 }
@@ -89,11 +105,11 @@ interface PartialCall {
  * History is committed per round so an abort or error never leaves an assistant tool_call without its results.
  */
 export async function* runAgent(projectId: string, userText: string, signal: AbortSignal): AsyncGenerator<AgentEvent> {
-  if (running.has(projectId)) {
+  const release = claimProject(projectId);
+  if (!release) {
     yield { type: "error", message: "The agent is already working on this project." };
     return;
   }
-  running.add(projectId);
   try {
     const provider = getActiveProvider();
     if (!provider) {
@@ -220,6 +236,6 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
   } catch (err) {
     yield { type: "error", message: signal.aborted ? "Cancelled." : err instanceof Error ? err.message : String(err) };
   } finally {
-    running.delete(projectId);
+    release();
   }
 }

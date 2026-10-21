@@ -13,7 +13,7 @@ import { Timeline } from "./components/Timeline";
 import { VariablesPanel } from "./components/Variables";
 import { VoicePanel } from "./components/VoicePanel";
 import { usePlayer } from "./player";
-import type { Project } from "./types";
+import type { AgentBackend, Project } from "./types";
 
 type Tab = "timeline" | "variables" | "voice" | "media" | "sources" | "brand" | "export";
 
@@ -27,6 +27,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "export", label: "Export" },
 ];
 
+const AGENT_LABEL: Record<AgentBackend, string> = {
+  api: "AI provider",
+  claude: "Claude Code",
+  codex: "Codex",
+  opencode: "OpenCode",
+};
+
 export function App() {
   const [ready, setReady] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
@@ -35,6 +42,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [hasProvider, setHasProvider] = useState(false);
+  const [backend, setBackend] = useState<AgentBackend>("api");
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<Tab>("timeline");
   /** A message for the director that another panel queued, tied to the project it is for. */
@@ -42,9 +50,11 @@ export function App() {
   const player = usePlayer();
 
   const refreshProviders = useCallback(async () => {
-    const { providers, activeProviderId } = await api.providers();
+    const [{ providers, activeProviderId }, { backend }] = await Promise.all([api.providers(), api.agentBackend()]);
     const active = providers.find((p) => p.id === activeProviderId) ?? providers[0];
-    setHasProvider(Boolean(active?.hasKey && active.model));
+    setBackend(backend);
+    // A coding agent on this computer needs no API key.
+    setHasProvider(backend !== "api" || Boolean(active?.hasKey && active.model));
   }, []);
 
   const refreshProjects = useCallback(async () => setProjects(await api.projects()), []);
@@ -119,6 +129,7 @@ export function App() {
             project={current}
             onFilesChanged={reload}
             hasProvider={hasProvider}
+            agentLabel={AGENT_LABEL[backend]}
             openSettings={() => setSettingsOpen(true)}
             autoSend={autoPrompt?.projectId === current.id ? autoPrompt.text : null}
             onAutoSent={() => setAutoPrompt(null)}
@@ -130,7 +141,7 @@ export function App() {
           <p>Create a project, choose 16:9 or 9:16, then describe what you want.</p>
           {!hasProvider && (
             <button className="primary" onClick={() => setSettingsOpen(true)}>
-              Connect an AI provider
+              Choose who writes the video
             </button>
           )}
         </main>
