@@ -21,7 +21,11 @@ export type AgentEvent =
   | { type: "done" }
   | { type: "error"; message: string };
 
-const MAX_ROUNDS = 30;
+/** Tool rounds one user message may take. A real video (docs, scenes, fixes) used all of 30 in a measured DeepSeek run. */
+const MAX_ROUNDS = 60;
+/** Sent once, only for the next request and never stored, when the model wants to finish without having checked its work. */
+export const CHECK_REMINDER =
+  "Automatic reminder: you changed files but did not run `check` afterwards. Run `check` now, fix every error it reports, then finish with your summary.";
 /** Paid images one user message may trigger. A confused or manipulated model must not be able to run up a bill. */
 const MAX_IMAGES_PER_TURN = 4;
 /** Tool output from earlier turns is cut to this when re-sent, to keep long sessions inside the context window. */
@@ -104,6 +108,10 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     messages.push({ role: "user", content: userText });
     await saveHistory(projectId, messages);
 
+    let checkedSinceChange = true;
+    let reminder = false;
+    let reminded = false;
+    let finished = false;
     for (let round = 0; round < MAX_ROUNDS; round++) {
       if (signal.aborted) break;
       const media = (await listMedia(projectId)).map((m) => `${m.path} (${m.kind})`);
@@ -113,7 +121,7 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
         {
           model: provider.model,
           stream: true,
-          messages: [{ role: "system", content: systemPrompt(meta, media, brief) }, ...forSend(messages, turnStart)],
+          messages: [{ role: "system", content: systemPrompt(meta, media, brief) }, ...forSend(messages, turnStart), ...(reminder ? [{ role: "user" as const, content: CHECK_REMINDER }] : [])],
           ...(provider.capabilities.tools ? { tools: TOOL_SPECS } : {}),
         },
         { signal },
@@ -137,8 +145,16 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
       }
 
       const done = calls.filter((c) => c.name);
+      reminder = false;
       if (done.length === 0) {
+        // Weaker models skip verification however the prompt words it. Ask once; the draft answer is not kept.
+        if (!checkedSinceChange && !reminded) {
+          reminded = true;
+          reminder = true;
+          continue;
+        }
         messages.push({ role: "assistant", content: text });
+        finished = true;
         break;
       }
 
@@ -171,6 +187,8 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
         results.push({ role: "tool", tool_call_id: call.id, content: out.content });
         if (out.images) images.push(...out.images);
         changed ||= out.changed === true;
+        if (call.function.name === "check") checkedSinceChange = true;
+        else if (out.changed === true) checkedSinceChange = false;
         yield { type: "tool-result", id: call.id, ok: out.ok, summary: out.summary };
       }
 
@@ -195,6 +213,9 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
       await saveHistory(projectId, messages);
     }
     await saveHistory(projectId, messages);
+    if (!finished && !signal.aborted) {
+      yield { type: "error", message: `The director stopped after ${MAX_ROUNDS} steps before finishing. Send "continue" to let it carry on.` };
+    }
     yield { type: "done" };
   } catch (err) {
     yield { type: "error", message: signal.aborted ? "Cancelled." : err instanceof Error ? err.message : String(err) };

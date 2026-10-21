@@ -17,12 +17,12 @@ type Delta = Record<string, unknown>;
 
 interface MockLlm {
   server: Server;
-  requests: unknown[];
+  requests: { messages: { content: unknown }[] }[];
 }
 
 /** A scripted OpenAI-compatible /chat/completions endpoint: each request pops the next list of stream deltas. */
 function mockLlm(script: Delta[][]): MockLlm {
-  const requests: unknown[] = [];
+  const requests: MockLlm["requests"] = [];
   const server = createServer((req, res) => {
     let body = "";
     req.on("data", (d) => (body += d));
@@ -53,7 +53,9 @@ describe("agent loop", () => {
       ],
       // Round 2: a tool call that must fail safely (path escapes the project).
       [{ tool_calls: [{ index: 0, id: "call_b", type: "function", function: { name: "read_file", arguments: '{"path":"../../etc/passwd"}' } }] }],
-      // Round 3: final answer.
+      // Round 3: final answer without having run check: the director asks once, the answer is not kept.
+      [{ content: "Draft: " }, { content: "wrote notes." }],
+      // Round 4: final answer after the reminder.
       [{ content: "Done: " }, { content: "wrote notes." }],
     ]);
     await new Promise<void>((r) => llm.server.listen(0, "127.0.0.1", r));
@@ -78,7 +80,8 @@ describe("agent loop", () => {
     expect(results.map((e) => e.ok)).toEqual([true, false]);
     expect(events.filter((e) => e.type === "files-changed")).toHaveLength(1);
     const text = events.filter((e) => e.type === "text").map((e) => e.text).join("");
-    expect(text).toBe("Done: wrote notes.");
+    expect(text).toBe("Draft: wrote notes.Done: wrote notes.");
+    expect(llm.requests.at(-1)?.messages.at(-1)?.content).toMatch(/Run `check` now/);
     expect(events.at(-1)?.type).toBe("done");
   }, 60_000);
 

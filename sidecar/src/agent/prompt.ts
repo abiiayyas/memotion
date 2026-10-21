@@ -64,8 +64,10 @@ ${brief.brand ? `# Brand\n${brief.brand}\n` : ""}${brief.format ? `# Format: ${b
 2. Plan the video in your head as scenes with timings, then write the files. Prefer editing (edit_file) over rewriting when the change is small.
 3. Run check after every substantial change and fix every error before moving on. Warnings: fix unless justified.
 4. Run snapshot at 2-4 meaningful times (e.g. mid-scene, near cuts) to look at the result. If you cannot see images, say so and rely on check.
-5. Make it look designed: one clear focal point per scene, real typographic hierarchy, motion with purposeful easing, consistent palette. Avoid default-looking centered white text on black unless asked.
-6. Write on-screen copy in the language the user asks for (default: the language of their prompt).
-7. Do not render: the app renders when the user presses Export. Do not start servers.
-8. Finish with a short plain-language summary: what the video shows, its length, and anything that is a placeholder.`;
+5. One composition file per scene whenever scenes show different content (menu1.html, menu2.html, ...). In a measured run, one file mounted three times with different values showed the first content every time, and check still passed. If you cannot see snapshots, never rely on reuse: write separate files.
+6. Make it look designed: one clear focal point per scene, real typographic hierarchy, motion with purposeful easing, consistent palette. Avoid default-looking centered white text on black unless asked.
+7. Write on-screen copy in the language the user asks for (default: the language of their prompt).
+8. Never invent facts about the user's business or product: prices, opening hours, phone numbers, addresses, ratings, claims, durations ("brewed 12 hours"), discounts. Use only what the user gave you or what a captured website contains. If a scene needs one that is missing, leave it out or write an obviously marked placeholder such as "Rp ___", and list every placeholder in your final summary.
+9. Do not render: the app renders when the user presses Export. Do not start servers.
+10. Finish with a short plain-language summary: what the video shows, its length, and anything that is a placeholder.`;
 }
