@@ -269,3 +269,52 @@ export interface AgentsInfo {
   backend: AgentBackend;
   clis: CliInfo[];
 }
+
+// ── preview marks (select / draw / comment) ──────────────────────────────────────────────
+
+/** What the preview page reports about an element. Coordinates are composition pixels. */
+export interface Target {
+  selector: string;
+  id?: string | null;
+  tag: string;
+  classes: string[];
+  text?: string | null;
+  media?: string | null;
+  rect: { x: number; y: number; w: number; h: number };
+  compositionId?: string | null;
+  compositionFile?: string | null;
+  start?: string | null;
+  duration?: string | null;
+  styles: Record<string, string>;
+}
+
+export interface Selection {
+  target: Target;
+  time: number;
+}
+
+export interface DrawingAttachment {
+  imagePath: string;
+  note: string;
+  hits: Target[];
+  time: number;
+  /** Small preview for the chat chip; never sent. */
+  thumb: string;
+}
+
+export interface MarkComment {
+  id: string;
+  time: number;
+  x: number;
+  y: number;
+  text: string;
+  target?: Target;
+  status: "open" | "sent";
+  createdAt: string;
+}
+
+export interface ChatContext {
+  selection?: Selection;
+  drawing?: Omit<DrawingAttachment, "thumb">;
+  commentIds?: string[];
+}

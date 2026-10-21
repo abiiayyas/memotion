@@ -4,7 +4,10 @@ import type {
   TtsRequest,
   AgentBackend,
   AgentsInfo,
+  ChatContext,
   LocalTtsStatus,
+  MarkComment,
+  Target,
   VoiceOption,
   WordTiming,
   AgentEvent,
@@ -173,6 +176,9 @@ export const api = {
     request<EditResult>("PUT", `/projects/${id}/variables`, { file, id: variable, value }),
 
   voices: () => request<{ voices: VoiceOption[] }>("GET", "/voices"),
+  comments: (id: string) => request<MarkComment[]>("GET", `/projects/${id}/comments`),
+  addComment: (id: string, c: { time: number; x: number; y: number; text: string; target?: Target }) => request<MarkComment>("POST", `/projects/${id}/comments`, c),
+  deleteComment: (id: string, commentId: string) => request<{ ok: true }>("DELETE", `/projects/${id}/comments/${commentId}`),
   agents: () => request<AgentsInfo>("GET", "/agents"),
   agentBackend: () => request<{ backend: AgentBackend }>("GET", "/agents/backend"),
   setAgentBackend: (backend: AgentBackend) => request<{ backend: AgentBackend }>("PUT", "/agents/backend", { backend }),
@@ -232,12 +238,12 @@ export const api = {
 };
 
 /** Send a chat message and yield agent events as they stream in. Aborting `signal` cancels the run. */
-export async function* chat(projectId: string, message: string, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+export async function* chat(projectId: string, message: string, signal: AbortSignal, context?: ChatContext): AsyncGenerator<AgentEvent> {
   const c = await connect();
   const res = await fetch(`${c.base}/projects/${projectId}/chat`, {
     method: "POST",
     headers: { ...auth(c), "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, context }),
     signal,
   });
   for await (const { data } of sse(res)) yield JSON.parse(data) as AgentEvent;
@@ -247,4 +253,23 @@ export async function* renderProgress(jobId: string, signal: AbortSignal): Async
   const c = await connect();
   const res = await fetch(`${c.base}/renders/${jobId}/events`, { headers: auth(c), signal });
   for await (const { data } of sse(res)) yield JSON.parse(data) as RenderJob;
+}
+
+/** The frame at `seconds` as a PNG, rendered by the sidecar (takes a few seconds). */
+export async function fetchFrame(projectId: string, seconds: number, signal?: AbortSignal): Promise<Blob> {
+  const c = await connect();
+  const res = await fetch(`${c.base}/projects/${projectId}/frame?t=${encodeURIComponent(String(seconds))}`, { headers: auth(c), signal });
+  if (!res.ok) throw new ApiError(`Could not capture the frame (HTTP ${res.status})`, res.status);
+  return res.blob();
+}
+
+/** Store a PNG for the next message to the director; returns its project-relative path. */
+export async function uploadMarkImage(projectId: string, png: Blob): Promise<string> {
+  const c = await connect();
+  const res = await fetch(`${c.base}/projects/${projectId}/marks/image`, { method: "POST", headers: { ...auth(c), "Content-Type": "image/png" }, body: png });
+  const data: unknown = await res.json().catch(() => null);
+  if (!res.ok || !data || typeof data !== "object" || !("path" in data) || typeof data.path !== "string") {
+    throw new ApiError(data && typeof data === "object" && "error" in data ? String(data.error) : `HTTP ${res.status}`, res.status);
+  }
+  return data.path;
 }

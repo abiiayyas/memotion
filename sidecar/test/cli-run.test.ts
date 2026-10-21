@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { claimProject, loadHistory, type AgentEvent } from "../src/agent/loop.js";
 import { childEnv } from "../src/agents/cli.js";
 import { openRunScope } from "../src/agents/mcp.js";
-import { buildInvocation, runCliAgent } from "../src/agents/run.js";
+import { buildInvocation, runCliAgent, withRecentConversation } from "../src/agents/run.js";
 import { createProject } from "../src/projects/store.js";
 import { buildApp } from "../src/server.js";
 
@@ -55,6 +55,31 @@ describe("how each CLI is started", () => {
     const env = await childEnv();
     expect(Object.keys(env).filter((k) => k.startsWith("MEMOTION_"))).toEqual([]);
     expect(env.PATH).toBeTruthy();
+  });
+});
+
+describe("conversation carried into a fresh CLI run", () => {
+  it("puts the last exchanges before the new message, skipping tool plumbing, and is plain when there is no history", () => {
+    const history = [
+      { role: "user", content: "Make a coffee teaser" },
+      { role: "assistant", content: null },
+      { role: "tool", content: "ignored tool output" },
+      { role: "assistant", content: "Done: 3 scenes." },
+    ];
+    const out = withRecentConversation(history, "Make it bigger");
+    expect(out).toContain("User: Make a coffee teaser");
+    expect(out).toContain("You: Done: 3 scenes.");
+    expect(out).not.toContain("ignored tool output");
+    expect(out.endsWith("New message from the user:\nMake it bigger")).toBe(true);
+    expect(withRecentConversation([], "Hello")).toBe("Hello");
+  });
+
+  it("keeps only the most recent turns and cuts very long ones", () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ role: i % 2 === 0 ? "user" : "assistant", content: `turn-${i} ${"x".repeat(3000)}` }));
+    const out = withRecentConversation(many, "next");
+    expect(out).toContain("turn-19");
+    expect(out).not.toContain("turn-13 ");
+    expect(out.length).toBeLessThan(6 * 1600 + 400);
   });
 });
 

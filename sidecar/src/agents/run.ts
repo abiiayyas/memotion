@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { buildBrief } from "../agent/brief.js";
-import { claimProject, recordTurn, type AgentEvent } from "../agent/loop.js";
+import { claimProject, loadHistory, recordTurn, type AgentEvent } from "../agent/loop.js";
 import { systemPrompt } from "../agent/prompt.js";
 import { selfPort } from "../config.js";
 import { previewEtag, waitPreviewChanged } from "../engine/preview.js";
@@ -107,6 +107,20 @@ export function buildInvocation(id: CliId, input: InvocationInput): Invocation {
 }
 
 const TAIL = 600;
+const RECENT_TURNS = 6;
+const RECENT_CHARS = 1500;
+
+/**
+ * Each CLI run starts fresh (nothing is carried over unless we say so), so "make it bigger" would mean nothing.
+ * The last few exchanges go in front of the new message; the CLI re-reads the project files for everything else.
+ */
+export function withRecentConversation(history: { role: string; content?: unknown }[], message: string): string {
+  const turns = history
+    .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim().length > 0)
+    .slice(-RECENT_TURNS)
+    .map((m) => `${m.role === "user" ? "User" : "You"}: ${String(m.content).slice(0, RECENT_CHARS)}`);
+  return turns.length === 0 ? message : `Earlier in this conversation:\n${turns.join("\n\n")}\n\nNew message from the user:\n${message}`;
+}
 
 /** The last few lines of stderr that say something, without the noise CLIs print (hooks, update notices). */
 function stderrSummary(text: string): string {
@@ -176,7 +190,8 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
     const cwd = projectPath(projectId);
     const isolatedConfigDir = await mkdtemp(join(tmpdir(), "memotion-cfg-"));
     cleanup.push(() => rm(isolatedConfigDir, { recursive: true, force: true }));
-    const inv = buildInvocation(id, { isolatedConfigDir, mcpUrl: `http://127.0.0.1:${selfPort()}${scope.path}`, system, prompt: userText, cwd });
+    const prompt = withRecentConversation(await loadHistory(projectId), userText);
+    const inv = buildInvocation(id, { isolatedConfigDir, mcpUrl: `http://127.0.0.1:${selfPort()}${scope.path}`, system, prompt, cwd });
 
     const child = spawn(binary, inv.args, { cwd, env: await childEnv(inv.env), stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32" });
     if (child.pid !== undefined) active[child.pid] = child;

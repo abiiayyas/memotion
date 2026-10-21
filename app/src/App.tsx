@@ -10,15 +10,18 @@ import { Settings } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
 import { SourcesPanel } from "./components/Sources";
 import { Timeline } from "./components/Timeline";
+import { CommentsPanel } from "./components/Comments";
 import { VariablesPanel } from "./components/Variables";
 import { VoicePanel } from "./components/VoicePanel";
+import { useMarkState } from "./marks";
 import { usePlayer } from "./player";
 import type { AgentBackend, Project } from "./types";
 
-type Tab = "timeline" | "variables" | "voice" | "media" | "sources" | "brand" | "export";
+type Tab = "timeline" | "comments" | "variables" | "voice" | "media" | "sources" | "brand" | "export";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "timeline", label: "Timeline" },
+  { id: "comments", label: "Comments" },
   { id: "variables", label: "Variables" },
   { id: "voice", label: "Voice & Captions" },
   { id: "media", label: "Media" },
@@ -48,6 +51,7 @@ export function App() {
   /** A message for the director that another panel queued, tied to the project it is for. */
   const [autoPrompt, setAutoPrompt] = useState<{ projectId: string; text: string } | null>(null);
   const player = usePlayer();
+  const marks = useMarkState(currentId);
 
   const refreshProviders = useCallback(async () => {
     const [{ providers, activeProviderId }, { backend }] = await Promise.all([api.providers(), api.agentBackend()]);
@@ -102,17 +106,21 @@ export function App() {
       {current ? (
         <>
           <main className="center">
-            <Preview key={current.id} project={current} reloadKey={reloadKey} player={player} />
+            <Preview key={current.id} project={current} reloadKey={reloadKey} player={player} marks={marks} />
             <div className="tabs">
               <div role="tablist">
                 {TABS.map((t) => (
                   <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
                     {t.label}
+                    {t.id === "comments" && marks.comments.some((c) => c.status === "open") ? ` (${marks.comments.filter((c) => c.status === "open").length})` : ""}
                   </button>
                 ))}
               </div>
               <div className={`tab-body ${tab}`}>
                 {tab === "timeline" && <Timeline key={current.id} project={current} player={player} reloadKey={reloadKey} onEdited={reload} />}
+                {tab === "comments" && (
+                  <CommentsPanel project={current} marks={marks} onAsk={(text) => setAutoPrompt({ projectId: current.id, text })} onSeek={player.seek} />
+                )}
                 {tab === "variables" && <VariablesPanel project={current} reloadKey={reloadKey} onEdited={reload} />}
                 {tab === "voice" && <VoicePanel project={current} onEdited={reload} />}
                 {tab === "media" && <MediaPanel project={current} onChanged={reload} />}
@@ -130,6 +138,7 @@ export function App() {
             onFilesChanged={reload}
             hasProvider={hasProvider}
             agentLabel={AGENT_LABEL[backend]}
+            marks={marks}
             openSettings={() => setSettingsOpen(true)}
             autoSend={autoPrompt?.projectId === current.id ? autoPrompt.text : null}
             onAutoSent={() => setAutoPrompt(null)}

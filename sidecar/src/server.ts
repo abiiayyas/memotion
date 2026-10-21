@@ -9,6 +9,9 @@ import { z } from "zod";
 import { runAgent, loadHistory, clearHistory, isAgentRunning } from "./agent/loop.js";
 import { CLI_SPECS, detectClis } from "./agents/cli.js";
 import { registerMcpRoutes } from "./agents/mcp.js";
+import { ChatContext, markCommentsSent, renderContext } from "./marks/store.js";
+import { registerPreviewProxy } from "./preview/proxy.js";
+import { registerMarkRoutes } from "./routes/marks.js";
 import { runCliAgent } from "./agents/run.js";
 import { registerContentRoutes } from "./routes/content.js";
 import { ensurePreview, withFreshPreview } from "./engine/preview.js";
@@ -79,7 +82,7 @@ const CreateProject = z.object({
   fps: z.union([z.literal(30), z.literal(60)]).optional(),
 });
 const UpsertProvider = z.object({ provider: ProviderInput, apiKey: z.string().min(1).optional() });
-const ChatBody = z.object({ message: z.string().trim().min(1).max(20_000) });
+const ChatBody = z.object({ message: z.string().trim().min(1).max(20_000), context: ChatContext.optional() });
 const MediaBody = z.object({ paths: z.array(z.string().min(1)).min(1).max(50) });
 const RenderBody = z.object({
   quality: z.enum(["draft", "standard", "high"]).optional(),
@@ -195,7 +198,12 @@ export function buildApp(opts: ServerOptions): Hono {
     }
     return c.json({ imported, failed });
   });
-  app.post("/projects/:id/preview", async (c) => c.json(await ensurePreview(c.req.param("id"))));
+  // The frame comes through our own proxy (see preview/proxy.ts), so the app can pick elements inside it.
+  app.post("/projects/:id/preview", async (c) => {
+    const id = c.req.param("id");
+    const { port } = await ensurePreview(id);
+    return c.json({ port, url: `http://${c.req.header("host")}/pv/${opts.token}/${id}/api/projects/${id}/preview` });
+  });
 
   // Raw project file (thumbnails, finished renders). Range requests are needed for <video> seeking.
   app.get("/projects/:id/raw/*", async (c) => {
@@ -263,14 +271,18 @@ export function buildApp(opts: ServerOptions): Hono {
   app.post("/projects/:id/chat", async (c) => {
     const id = c.req.param("id");
     await readMeta(id); // 404-ish early failure for unknown ids
-    const { message } = ChatBody.parse(await c.req.json());
+    const body = ChatBody.parse(await c.req.json());
+    // Marks from the preview (selection, drawing, comments) travel with the message as text, and the drawing as an image.
+    const rendered = body.context ? await renderContext(id, body.context) : { text: "", images: [] };
+    const message = rendered.text ? `${body.message}\n\n${rendered.text}` : body.message;
+    if (body.context?.commentIds?.length) await markCommentsSent(id, body.context.commentIds);
     const abort = new AbortController();
     chatAborts.set(id, abort);
     return streamSSE(c, async (stream) => {
       stream.onAbort(() => abort.abort());
       try {
         const backend = getAgentBackend();
-        const events = backend === "api" ? runAgent(id, message, abort.signal) : runCliAgent(id, message, abort.signal, backend);
+        const events = backend === "api" ? runAgent(id, message, abort.signal, rendered.images) : runCliAgent(id, message, abort.signal, backend);
         for await (const ev of events) {
           await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
         }
@@ -411,6 +423,8 @@ export function buildApp(opts: ServerOptions): Hono {
 
   registerContentRoutes(app);
   registerMcpRoutes(app);
+  registerPreviewProxy(app, opts.token);
+  registerMarkRoutes(app);
 
   return app;
 }

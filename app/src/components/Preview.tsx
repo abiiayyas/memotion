@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { usePicker, type MarkState } from "../marks";
 import type { Player } from "../player";
+import { MarkLayer, MarkToolbar, useDraw } from "./PreviewTools";
 import type { Project } from "../types";
 
 const DIMS = {
@@ -14,12 +16,14 @@ export function fmtTime(t: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function Preview({ project, reloadKey, player }: { project: Project; reloadKey: number; player: Player }) {
+export function Preview({ project, reloadKey, player, marks }: { project: Project; reloadKey: number; player: Player; marks: MarkState }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.3);
   const dims = DIMS[project.orientation];
+  const picker = usePicker(player.frameRef, `${url}#${reloadKey}`);
+  const draw = useDraw(project, player, picker, dims, marks);
 
   useEffect(() => {
     setUrl(null);
@@ -54,10 +58,12 @@ export function Preview({ project, reloadKey, player }: { project: Project; relo
               style={{ width: dims.w, height: dims.h, transform: `scale(${scale})` }}
               onLoad={player.pause}
             />
+            <MarkLayer project={project} player={player} scale={scale} dims={dims} picker={picker} marks={marks} draw={draw} />
           </div>
         ) : (
           <div className="notice">Starting preview…</div>
         )}
+        <MarkToolbar marks={marks} draw={draw} disabled={!url || !picker.ready} />
       </div>
       <div className="transport">
         <button onClick={player.toggle} disabled={!url} aria-label={player.playing ? "Pause" : "Play"}>

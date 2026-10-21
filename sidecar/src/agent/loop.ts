@@ -104,7 +104,7 @@ interface PartialCall {
  * One user turn: stream the model, run its tool calls, feed results back, repeat until it answers in text.
  * History is committed per round so an abort or error never leaves an assistant tool_call without its results.
  */
-export async function* runAgent(projectId: string, userText: string, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+export async function* runAgent(projectId: string, userText: string, signal: AbortSignal, attached: Buffer[] = []): AsyncGenerator<AgentEvent> {
   const release = claimProject(projectId);
   if (!release) {
     yield { type: "error", message: "The agent is already working on this project." };
@@ -122,6 +122,16 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     const turnStart = messages.length;
     const imageBudget = { left: MAX_IMAGES_PER_TURN };
     messages.push({ role: "user", content: userText });
+    // An annotated frame from the user goes to a model that can see it, as a second message so the text stays in history.
+    if (attached.length > 0 && provider.capabilities.vision) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: "The frame the user marked:" },
+          ...attached.map((b) => ({ type: "image_url" as const, image_url: { url: `data:image/png;base64,${b.toString("base64")}` } })),
+        ],
+      });
+    }
     await saveHistory(projectId, messages);
 
     let checkedSinceChange = true;

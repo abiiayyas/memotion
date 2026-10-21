@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, chat } from "../api";
-import type { ChatItem, Project } from "../types";
+import type { MarkState } from "../marks";
+import type { ChatContext, ChatItem, Project } from "../types";
 
 type Item = ChatItem | { kind: "error"; text: string };
 
@@ -20,6 +21,7 @@ export function Chat({
   onFilesChanged,
   hasProvider,
   agentLabel,
+  marks,
   openSettings,
   autoSend,
   onAutoSent,
@@ -29,6 +31,8 @@ export function Chat({
   hasProvider: boolean;
   /** Who is writing the video, shown in the header. */
   agentLabel: string;
+  /** What the user marked in the preview; goes with the next message. */
+  marks: MarkState;
   openSettings: () => void;
   /** A message another panel wants sent (e.g. the Remotion conversion brief). Sent once, then cleared. */
   autoSend: string | null;
@@ -64,16 +68,30 @@ export function Chat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSend, hasProvider, busy]);
 
+  const openComments = marks.comments.filter((c) => c.status === "open");
+  const hasMarks = marks.selection !== null || marks.drawing !== null || (marks.includeComments && openComments.length > 0);
+
   async function send(override?: string) {
-    const message = (override ?? text).trim();
+    // Marks alone are enough to send: "this one" needs no words when the director knows what to do with it.
+    const message = (override ?? text).trim() || (hasMarks ? "Make the change I marked." : "");
     if (!message || busy) return;
+    const context: ChatContext = {
+      ...(marks.selection ? { selection: marks.selection } : {}),
+      ...(marks.drawing ? { drawing: { imagePath: marks.drawing.imagePath, note: marks.drawing.note, hits: marks.drawing.hits, time: marks.drawing.time } } : {}),
+      ...(marks.includeComments && openComments.length > 0 ? { commentIds: openComments.map((c) => c.id) } : {}),
+    };
+    const hadMarks = Object.keys(context).length > 0;
+    if (hadMarks) {
+      marks.setSelection(null);
+      marks.setDrawing(null);
+    }
     if (override === undefined) setText("");
     setBusy(true);
     setItems((prev) => [...prev, { kind: "user", text: message }]);
     const ctl = new AbortController();
     abort.current = ctl;
     try {
-      for await (const ev of chat(project.id, message, ctl.signal)) {
+      for await (const ev of chat(project.id, message, ctl.signal, hadMarks ? context : undefined)) {
         setItems((prev) => {
           const next = [...prev];
           const last = next.at(-1);
@@ -109,6 +127,7 @@ export function Chat({
       setBusy(false);
       abort.current = null;
       onFilesChanged();
+      if (hadMarks) void marks.reloadComments();
     }
   }
 
@@ -157,6 +176,29 @@ export function Chat({
           No AI provider yet. <button className="link" onClick={openSettings}>Add one in Settings</button>.
         </div>
       )}
+      {hasMarks && (
+        <div className="mark-chips" aria-label="Marks for the next message">
+          {marks.selection && (
+            <span className="mark-chip sel" title={marks.selection.target.selector}>
+              <span>◎ {marks.selection.target.selector}{marks.selection.target.text ? ` “${marks.selection.target.text}”` : ""}</span>
+              <button type="button" onClick={() => marks.setSelection(null)} aria-label="Remove selection">✕</button>
+            </span>
+          )}
+          {marks.drawing && (
+            <span className="mark-chip draw" title={marks.drawing.note || "Drawing on the frame"}>
+              <img src={marks.drawing.thumb} alt="" />
+              <span>Drawing{marks.drawing.note ? `: ${marks.drawing.note}` : ""}</span>
+              <button type="button" onClick={() => marks.setDrawing(null)} aria-label="Remove drawing">✕</button>
+            </span>
+          )}
+          {marks.includeComments && openComments.length > 0 && (
+            <span className="mark-chip cmt">
+              <span>💬 {openComments.length} comment{openComments.length === 1 ? "" : "s"}</span>
+              <button type="button" onClick={() => marks.setIncludeComments(false)} aria-label="Do not send comments">✕</button>
+            </span>
+          )}
+        </div>
+      )}
       <form
         className="composer"
         onSubmit={(e) => {
@@ -182,7 +224,7 @@ export function Chat({
             Stop
           </button>
         ) : (
-          <button type="submit" className="primary" disabled={!text.trim() || !hasProvider}>
+          <button type="submit" className="primary" disabled={(!text.trim() && !hasMarks) || !hasProvider}>
             Send
           </button>
         )}

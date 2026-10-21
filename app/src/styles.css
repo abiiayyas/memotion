@@ -225,3 +225,46 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .agent-opt .warn-text { color: #e8b24d; }
 .agent-picker .hint { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 .agent-tag { margin-left: 6px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 400; }
+
+/* Preview tools: select / draw / comment */
+.preview, .stage, .frame-wrap { position: relative; }
+.mark-layer { position: absolute; inset: 0; touch-action: none; z-index: 2; }
+.draw-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mark-dock { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 6; max-width: 96%; }
+.mark-toolbar { display: flex; gap: 6px; padding: 8px; background: rgba(28, 28, 30, 0.95); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.mark-toolbar .tool { width: 50px; height: 50px; border-radius: 15px; display: grid; place-items: center; background: transparent; border: 0; color: #cfcfd4; padding: 0; }
+.mark-toolbar .tool:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.mark-toolbar .tool.on { background: #1f7a52; color: #fff; }
+.mark-toolbar .tool:disabled { opacity: 0.4; cursor: default; }
+.draw-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 6px 8px; background: rgba(28, 28, 30, 0.95); border: 1px solid var(--line); border-radius: 12px; }
+.draw-bar input { width: 150px; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; padding: 0; }
+.swatch.on { border-color: #fff; }
+.draw-error { color: #ff8a8c; font-size: 11px; max-width: 280px; }
+.pin-wrap { position: absolute; transform: translate(-50%, -100%); z-index: 3; }
+.pin, .pin.new { width: 26px; height: 26px; border-radius: 50% 50% 50% 4px; background: #2fbf71; color: #04210f; font-weight: 700; font-size: 12px; border: 2px solid #fff; padding: 0; display: grid; place-items: center; }
+.pin.sent { background: #8a8f98; color: #111; }
+.pin.new { background: #ffd23f; color: #222; }
+.pin-card { position: absolute; left: -12px; top: 8px; width: 250px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.pin-card p { margin: 0; font-size: 12px; white-space: pre-wrap; }
+.pin-card small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.pin-card textarea { width: 100%; resize: none; }
+
+/* Marks attached to the next message */
+.mark-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 0; }
+.mark-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); font-size: 11px; }
+.mark-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.mark-chip img { height: 22px; border-radius: 4px; }
+.mark-chip button { padding: 0 6px; border: 0; background: transparent; color: var(--muted); }
+.mark-chip.sel { border-color: #2fbf71; }
+.mark-chip.draw { border-color: #3b82f6; }
+.mark-chip.cmt { border-color: #ffd23f; }
+
+/* Comments tab */
+.comments-panel { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.comment-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.comment-row.sent { opacity: 0.6; }
+.comment-row .n { width: 22px; height: 22px; flex: none; border-radius: 50%; background: #2fbf71; color: #04210f; font-weight: 700; font-size: 12px; display: grid; place-items: center; }
+.comment-row.sent .n { background: #8a8f98; }
+.comment-row p { margin: 0 0 2px; font-size: 13px; white-space: pre-wrap; }
+.comment-row small { color: var(--muted); }

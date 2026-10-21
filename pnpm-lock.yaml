@@ -25,6 +25,9 @@ importers:
       react-dom:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@tauri-apps/cli':
         specifier: 2.12.3
@@ -78,6 +81,9 @@ importers:
       esbuild:
         specifier: ^0.25.12
         version: 0.25.12
+      puppeteer-core:
+        specifier: 25.14.0
+        version: 25.14.0(yauzl@3.4.0)
       tsx:
         specifier: 4.23.15
         version: 4.23.15
