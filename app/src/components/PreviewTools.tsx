@@ -27,6 +27,19 @@ interface Dims {
   h: number;
 }
 
+/**
+ * A data: URL as a Blob, without fetch: the app's CSP (connect-src) does not allow data: URLs, so `fetch(dataUrl)`
+ * works in the browser but fails in the packaged app.
+ */
+export function dataUrlToBlob(url: string): Blob {
+  const [head, body = ""] = url.split(",");
+  const mime = /^data:([^;]+)/.exec(head ?? "")?.[1] ?? "application/octet-stream";
+  const raw = atob(body);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
 // ── drawing ──────────────────────────────────────────────────────────────────────────────
 
 export interface Draw {
@@ -109,7 +122,7 @@ export function useDraw(project: Project, player: Player, picker: Picker, dims: 
         ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
         paint(ctx, list, canvas.width / dims.w);
 
-        const png = await (await fetch(canvas.toDataURL("image/png"))).blob();
+        const png = dataUrlToBlob(canvas.toDataURL("image/png"));
         const imagePath = await uploadMarkImage(project.id, png);
 
         const thumb = document.createElement("canvas");
