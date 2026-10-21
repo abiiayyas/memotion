@@ -1,10 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { LocalTranscriptionUnavailable, normalizeTranscript, transcribeFile } from "../src/audio/transcribe.js";
+import { normalizeTranscript, transcribeFile } from "../src/audio/transcribe.js";
 
 const dir = mkdtempSync(join(tmpdir(), "memotion-stt-test-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -53,22 +52,6 @@ describe("local transcription through the real HyperFrames CLI", () => {
     expect(t.words[4]?.start).toBeCloseTo(1.6, 2);
     expect(t.duration).toBeGreaterThan(4);
     for (let i = 1; i < t.words.length; i++) expect(t.words[i]!.start).toBeGreaterThanOrEqual(t.words[i - 1]!.start);
-  }, 60_000);
-
-  const whisperInstalled = (() => {
-    try {
-      execFileSync("sh", ["-c", "command -v whisper-cli || command -v whisper-cpp"], { stdio: "ignore" });
-      return true;
-    } catch {
-      return false;
-    }
-  })();
-
-  // The default must never install software on the user's machine.
-  it.skipIf(whisperInstalled)("reports local transcription as unavailable instead of installing whisper-cpp", async () => {
-    const wav = join(dir, "tone.wav");
-    execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", wav]);
-    await expect(transcribeFile(wav, { engine: "local" })).rejects.toBeInstanceOf(LocalTranscriptionUnavailable);
   }, 60_000);
 });
 

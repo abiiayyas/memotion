@@ -7,6 +7,8 @@ export interface Project {
   fps: 30 | 60;
   createdAt: string;
   updatedAt: string;
+  brandKitId?: string;
+  formatId?: string;
 }
 
 export interface ProviderCaps {
@@ -20,6 +22,7 @@ export interface Provider {
   name: string;
   baseURL: string;
   model: string;
+  imageModel?: string;
   headers: Record<string, string>;
   capabilities: ProviderCaps;
   hasKey: boolean;
@@ -139,7 +142,14 @@ export interface VoiceOption {
   name: string;
   locale: string;
   gender?: string;
-  provider: "edge" | "openai" | "elevenlabs";
+  provider: "edge" | "openai" | "elevenlabs" | "local";
+}
+
+export interface LocalTtsStatus {
+  supported: boolean;
+  engine: boolean;
+  voices: Record<string, boolean>;
+  voiceSizes: Record<string, number>;
 }
 
 export interface WordTiming {
@@ -150,7 +160,7 @@ export interface WordTiming {
 
 export interface TtsRequest {
   text: string;
-  provider: "edge" | "openai" | "elevenlabs";
+  provider: "edge" | "openai" | "elevenlabs" | "local";
   voice?: string;
   rate?: number;
 }
@@ -165,4 +175,77 @@ export interface CaptionRequest {
   primaryColor: string;
   accentColor: string;
   wordsPerGroup: number;
+}
+
+export type CaptionStyleName = "highlight" | "pop" | "classic" | "clean";
+
+export interface BrandKit {
+  id: string;
+  name: string;
+  colors: { primary: string; accent: string; background: string; text: string };
+  fonts: { heading: string; body: string };
+  notes: string;
+  captionStyle: CaptionStyleName;
+  logo?: string;
+  customFonts: { family: string; file: string }[];
+}
+
+export interface Format {
+  id: string;
+  name: string;
+  description: string;
+  builtIn: boolean;
+  orientation?: Orientation;
+}
+
+export interface TemplateInfo {
+  id: string;
+  name: string;
+  description: string;
+  orientation: Orientation;
+  fps: 30 | 60;
+  createdAt: string;
+  hasThumb: boolean;
+}
+
+export interface VariableFill {
+  file: string;
+  id: string;
+  value: VariableValue;
+}
+
+export interface CaptureResult {
+  dir: string;
+  url: string;
+  title: string;
+  screenshots: string[];
+  assets: string[];
+  tokens: { colors: string[]; fonts: string[] };
+  text: string;
+  warnings: string[];
+}
+
+export interface RemotionFinding {
+  severity: "blocker" | "warning" | "info";
+  file: string;
+  message: string;
+}
+
+export interface RemotionAnalysis {
+  findings: RemotionFinding[];
+  blocked: boolean;
+  facts: { orientation: Orientation; fps: 30 | 60 };
+  sourceFiles: number;
+}
+
+export interface RemotionImport {
+  project: Project;
+  analysis: RemotionAnalysis;
+  prompt: string;
+}
+
+export interface AppSettings {
+  imageGeneration: boolean;
+  /** Why image generation cannot run right now, or null when it can. */
+  imageBlocker: string | null;
 }

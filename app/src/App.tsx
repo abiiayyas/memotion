@@ -1,24 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, connect } from "./api";
+import { BrandPanel } from "./components/Brand";
 import { Chat } from "./components/Chat";
 import { ExportPanel } from "./components/Export";
+import { ImportDialog } from "./components/ImportDialog";
 import { MediaPanel } from "./components/Media";
 import { Preview } from "./components/Preview";
 import { Settings } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
+import { SourcesPanel } from "./components/Sources";
 import { Timeline } from "./components/Timeline";
 import { VariablesPanel } from "./components/Variables";
 import { VoicePanel } from "./components/VoicePanel";
 import { usePlayer } from "./player";
 import type { Project } from "./types";
 
-type Tab = "timeline" | "variables" | "voice" | "media" | "export";
+type Tab = "timeline" | "variables" | "voice" | "media" | "sources" | "brand" | "export";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "timeline", label: "Timeline" },
   { id: "variables", label: "Variables" },
   { id: "voice", label: "Voice & Captions" },
   { id: "media", label: "Media" },
+  { id: "sources", label: "Sources" },
+  { id: "brand", label: "Brand" },
   { id: "export", label: "Export" },
 ];
 
@@ -28,9 +33,12 @@ export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [hasProvider, setHasProvider] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<Tab>("timeline");
+  /** A message for the director that another panel queued, tied to the project it is for. */
+  const [autoPrompt, setAutoPrompt] = useState<{ projectId: string; text: string } | null>(null);
   const player = usePlayer();
 
   const refreshProviders = useCallback(async () => {
@@ -38,6 +46,8 @@ export function App() {
     const active = providers.find((p) => p.id === activeProviderId) ?? providers[0];
     setHasProvider(Boolean(active?.hasKey && active.model));
   }, []);
+
+  const refreshProjects = useCallback(async () => setProjects(await api.projects()), []);
 
   useEffect(() => {
     (async () => {
@@ -77,6 +87,7 @@ export function App() {
           if (currentId === id) setCurrentId(rest[0]?.id ?? null);
         }}
         openSettings={() => setSettingsOpen(true)}
+        openImport={() => setImportOpen(true)}
       />
       {current ? (
         <>
@@ -95,11 +106,23 @@ export function App() {
                 {tab === "variables" && <VariablesPanel project={current} reloadKey={reloadKey} onEdited={reload} />}
                 {tab === "voice" && <VoicePanel project={current} onEdited={reload} />}
                 {tab === "media" && <MediaPanel project={current} onChanged={reload} />}
+                {tab === "sources" && (
+                  <SourcesPanel project={current} onEdited={reload} onAsk={(text) => setAutoPrompt({ projectId: current.id, text })} openSettings={() => setSettingsOpen(true)} />
+                )}
+                {tab === "brand" && <BrandPanel key={current.id} project={current} onProjectChanged={() => void refreshProjects()} onEdited={reload} />}
                 {tab === "export" && <ExportPanel project={current} />}
               </div>
             </div>
           </main>
-          <Chat key={current.id} project={current} onFilesChanged={reload} hasProvider={hasProvider} openSettings={() => setSettingsOpen(true)} />
+          <Chat
+            key={current.id}
+            project={current}
+            onFilesChanged={reload}
+            hasProvider={hasProvider}
+            openSettings={() => setSettingsOpen(true)}
+            autoSend={autoPrompt?.projectId === current.id ? autoPrompt.text : null}
+            onAutoSent={() => setAutoPrompt(null)}
+          />
         </>
       ) : (
         <main className="center empty-state">
@@ -113,6 +136,17 @@ export function App() {
         </main>
       )}
       {settingsOpen && <Settings onClose={() => setSettingsOpen(false)} onChanged={() => void refreshProviders()} />}
+      {importOpen && (
+        <ImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={(project, prompt) => {
+            setProjects((prev) => [project, ...prev]);
+            setCurrentId(project.id);
+            setTab("timeline");
+            if (prompt) setAutoPrompt({ projectId: project.id, text: prompt });
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { runAgent, loadHistory, clearHistory, isAgentRunning } from "./agent/loop.js";
+import { registerContentRoutes } from "./routes/content.js";
 import { ensurePreview, withFreshPreview } from "./engine/preview.js";
 import { EditOp, editTimeline, readTimeline, undoTimeline } from "./engine/timeline.js";
 import { cancelJob, getJob, listJobs, renderEvents, startRender, type RenderJob } from "./engine/render.js";
@@ -17,6 +18,10 @@ import {
   generateSpeechAndCaptions,
   transcribeAndCaption,
   LocalTranscriptionUnavailable,
+  LocalTtsNotInstalled,
+  LOCAL_VOICES,
+  installLocalTts,
+  localTtsStatus,
   CaptionRequest,
   TtsRequest,
 } from "./audio/index.js";
@@ -293,6 +298,17 @@ export function buildApp(opts: ServerOptions): Hono {
     deleteApiKey("elevenlabs");
     return c.json({ ok: true });
   });
+  // Offline voices: nothing is downloaded until the user asks for it here.
+  app.get("/tts-local", (c) => c.json({ ...localTtsStatus(), voiceSizes: Object.fromEntries(Object.entries(LOCAL_VOICES).map(([id, v]) => [id, v.megabytes])) }));
+  app.post("/tts-local/install", async (c) => {
+    const { voice } = z.object({ voice: z.string().refine((v) => v in LOCAL_VOICES, "Unknown voice") }).parse(await c.req.json());
+    try {
+      await installLocalTts(voice);
+      return c.json({ ok: true, ...localTtsStatus() });
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  });
   app.post("/projects/:id/tts", async (c) => {
     const id = c.req.param("id");
     if (isAgentRunning(id)) return c.json({ ok: false, reason: "The director is working on this video. Wait for it to finish." }, 409);
@@ -306,6 +322,7 @@ export function buildApp(opts: ServerOptions): Hono {
       const res = await withFreshPreview(id, () => generateSpeechAndCaptions(id, body.tts, body.caption));
       return c.json({ ok: true, ...res });
     } catch (err) {
+      if (err instanceof LocalTtsNotInstalled) return c.json({ ok: false, code: "local_tts_unavailable", voice: err.voice, error: err.message }, 422);
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
     }
   });
@@ -325,13 +342,14 @@ export function buildApp(opts: ServerOptions): Hono {
           wordsPerGroup: 3,
         }),
         language: z.string().min(2).max(8).optional(),
+        model: z.enum(["base", "small", "medium", "base.en", "small.en", "medium.en"]).optional(),
         /** Explicit consent to install whisper-cpp and download a model. */
         allowInstall: z.boolean().optional(),
       })
       .parse(await c.req.json());
     try {
       const res = await withFreshPreview(id, () =>
-        transcribeAndCaption(id, body.mediaPath, body.caption, { language: body.language, allowInstall: body.allowInstall }),
+        transcribeAndCaption(id, body.mediaPath, body.caption, { language: body.language, model: body.model, allowInstall: body.allowInstall }),
       );
       return c.json({ ok: true, ...res });
     } catch (err) {
@@ -366,6 +384,8 @@ export function buildApp(opts: ServerOptions): Hono {
       renderEvents.off(jobId, send);
     });
   });
+
+  registerContentRoutes(app);
 
   return app;
 }

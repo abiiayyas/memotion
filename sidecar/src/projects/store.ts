@@ -14,6 +14,10 @@ export interface ProjectMeta {
   fps: 30 | 60;
   createdAt: string;
   updatedAt: string;
+  /** Brand kit applied to this project; its colours, fonts and logo go into the director's brief. */
+  brandKitId?: string;
+  /** Workflow format (a markdown recipe) the director follows for this project. */
+  formatId?: string;
 }
 
 export const DIMENSIONS: Record<Orientation, { width: number; height: number }> = {
@@ -46,6 +50,18 @@ export async function touch(id: string): Promise<void> {
   const meta = await readMeta(id);
   meta.updatedAt = new Date().toISOString();
   await writeFile(join(projectPath(id), META_FILE), JSON.stringify(meta, null, 2));
+}
+
+export async function writeMeta(id: string, meta: ProjectMeta): Promise<void> {
+  await writeFile(join(projectPath(id), META_FILE), JSON.stringify(meta, null, 2));
+}
+
+/** Change optional project settings. `undefined` removes a field. */
+export async function updateMeta(id: string, patch: Partial<Pick<ProjectMeta, "brandKitId" | "formatId" | "name">>): Promise<ProjectMeta> {
+  const meta = { ...(await readMeta(id)), ...patch, updatedAt: new Date().toISOString() };
+  for (const key of Object.keys(patch) as (keyof typeof patch)[]) if (patch[key] === undefined) delete meta[key];
+  await writeMeta(id, meta);
+  return meta;
 }
 
 export async function listProjects(): Promise<ProjectMeta[]> {

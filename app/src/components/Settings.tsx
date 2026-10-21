@@ -7,6 +7,7 @@ interface Draft {
   name: string;
   baseURL: string;
   model: string;
+  imageModel?: string;
   headers: Record<string, string>;
   capabilities: Provider["capabilities"];
   apiKey: string;
@@ -72,7 +73,7 @@ export function Settings({ onClose, onChanged }: { onClose: () => void; onChange
     setError(null);
     try {
       await api.saveProvider(
-        { id: draft.id || slug(draft.name), name: draft.name, baseURL: draft.baseURL, model: draft.model, headers: draft.headers, capabilities: draft.capabilities },
+        { id: draft.id || slug(draft.name), name: draft.name, baseURL: draft.baseURL, model: draft.model, imageModel: draft.imageModel?.trim() || undefined, headers: draft.headers, capabilities: draft.capabilities },
         draft.apiKey || undefined,
       );
       setDraft({ ...draft, apiKey: "", isNew: false, hasKey: draft.hasKey || draft.apiKey !== "" });
@@ -167,12 +168,18 @@ export function Settings({ onClose, onChanged }: { onClose: () => void; onChange
               </label>
               <fieldset>
                 <legend>Capabilities</legend>
-                {(["tools", "vision"] as const).map((k) => (
+                {(["tools", "vision", "images"] as const).map((k) => (
                   <label key={k} className="check">
                     <input type="checkbox" checked={draft.capabilities[k]} onChange={(e) => set("capabilities", { ...draft.capabilities, [k]: e.target.checked })} />
-                    {k === "tools" ? "Tool calling (required for the director agent)" : "Can see images (lets the agent review snapshots)"}
+                    {k === "tools" ? "Tool calling (required for the director agent)" : k === "vision" ? "Can see images (lets the agent review snapshots)" : "Can generate images (paid, needs an image model below)"}
                   </label>
                 ))}
+                {draft.capabilities.images && (
+                  <label>
+                    Image model
+                    <input value={draft.imageModel ?? ""} onChange={(e) => set("imageModel", e.target.value)} placeholder="gpt-image-1" />
+                  </label>
+                )}
               </fieldset>
               {error && <div className="notice error">{error}</div>}
               {test && <div className={`notice ${test.ok ? "okmsg" : "error"}`}>{test.ok ? `Connected. Model replied: “${test.message}”. Tool calling: ${test.toolCalling ? "works" : "not supported"}.` : test.message}</div>}

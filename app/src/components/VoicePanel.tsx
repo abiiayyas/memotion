@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api";
-import type { CaptionRequest, CaptionStyle, Media, Project, TtsRequest, VoiceOption } from "../types";
+import type { CaptionRequest, CaptionStyle, LocalTtsStatus, Media, Project, TtsRequest, VoiceOption } from "../types";
 
-type Vendor = "edge" | "openai" | "elevenlabs";
+type Vendor = "edge" | "local" | "openai" | "elevenlabs";
+type KeyVendor = "openai" | "elevenlabs";
 
 const VENDOR_LABEL: Record<Vendor, string> = {
-  edge: "Edge TTS (free, no key)",
+  edge: "Edge TTS (free, online, no key)",
+  local: "Offline voice (Piper, no internet)",
   openai: "OpenAI TTS",
   elevenlabs: "ElevenLabs",
 };
@@ -20,6 +22,9 @@ const STYLE_LABEL: Record<CaptionStyle, string> = {
 export function VoicePanel({ project, onEdited }: { project: Project; onEdited: () => void }) {
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [keys, setKeys] = useState<{ openai: boolean; elevenlabs: boolean }>({ openai: false, elevenlabs: false });
+  const [localTts, setLocalTts] = useState<LocalTtsStatus | null>(null);
+  /** Set when the offline voice is not downloaded: the user must agree before anything is downloaded. */
+  const [needsLocalConsent, setNeedsLocalConsent] = useState(false);
   const [mediaList, setMediaList] = useState<Media[]>([]);
 
   const [text, setText] = useState("");
@@ -59,6 +64,13 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
       // leave the previous state
     }
   }, []);
+  const refreshLocal = useCallback(async () => {
+    try {
+      setLocalTts(await api.localTts());
+    } catch {
+      setLocalTts(null);
+    }
+  }, []);
   const refreshMedia = useCallback(async () => {
     try {
       setMediaList((await api.media(project.id)).filter((m) => m.kind === "audio" || m.kind === "video"));
@@ -70,15 +82,19 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
   useEffect(() => {
     void refreshVoices();
     void refreshKeys();
+    void refreshLocal();
     void refreshMedia();
-  }, [refreshVoices, refreshKeys, refreshMedia]);
+  }, [refreshVoices, refreshKeys, refreshLocal, refreshMedia]);
 
   const vendorVoices = voices.filter((v) => v.provider === vendor);
-  const vendorNeedsKey = vendor !== "edge" && !keys[vendor];
+  const keyVendor: KeyVendor | null = vendor === "openai" || vendor === "elevenlabs" ? vendor : null;
+  const vendorNeedsKey = keyVendor !== null && !keys[keyVendor];
+  const localUnsupported = vendor === "local" && localTts !== null && !localTts.supported;
 
   function chooseVendor(next: Vendor) {
     setVendor(next);
     setKeyDraft("");
+    setNeedsLocalConsent(false);
     const first = voices.find((v) => v.provider === next);
     if (first) setVoice(first.id);
   }
@@ -86,10 +102,10 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
   const captionRequest = (): CaptionRequest => ({ style, position, fontSize, fontFamily: "Inter", primaryColor, accentColor, wordsPerGroup });
 
   async function saveKey() {
-    if (vendor === "edge" || keyDraft.trim().length < 8) return;
+    if (keyVendor === null || keyDraft.trim().length < 8) return;
     setError(null);
     try {
-      await api.saveTtsKey(vendor, keyDraft.trim());
+      await api.saveTtsKey(keyVendor, keyDraft.trim());
       setKeyDraft("");
       await refreshKeys();
       await refreshVoices(); // ElevenLabs voices appear once the key exists
@@ -106,8 +122,28 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
     chooseVendor("edge");
   }
 
+  async function installLocal() {
+    setBusy(true);
+    setError(null);
+    setNeedsLocalConsent(false);
+    setNotice("Downloading the offline speech engine and voice (about 60 MB)…");
+    try {
+      setLocalTts(await api.installLocalTts(voice));
+      setNotice("Offline voice installed. Press Generate.");
+    } catch (e) {
+      setNotice(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generate() {
-    if (!text.trim() || busy || vendorNeedsKey) return;
+    if (!text.trim() || busy || vendorNeedsKey || localUnsupported) return;
+    if (vendor === "local" && localTts && !(localTts.engine && localTts.voices[voice])) {
+      setNeedsLocalConsent(true);
+      return;
+    }
     setBusy(true);
     setError(null);
     setWarning(null);
@@ -117,12 +153,17 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
       const res = await api.generateSpeech(project.id, tts, withCaptions ? captionRequest() : undefined);
       setNotice(`Voiceover ready (${res.duration.toFixed(1)}s, ${res.words.length} words).${res.captionsFile ? " Captions are on the timeline." : ""}`);
       if (res.timingEstimated) {
-        setWarning("OpenAI returned no word timings, so they were estimated from the script. Captions will drift from the voice; try Edge TTS or ElevenLabs for exact timing.");
+        setWarning(
+          vendor === "local"
+            ? "Word times were estimated from the script (usually within about 0.3 s, drifting later in long scripts). For exact timing, run Transcribe on the voiceover below once local transcription is set up."
+            : "OpenAI returned no word timings, so they were estimated from the script. Captions will drift from the voice; try Edge TTS or ElevenLabs for exact timing.",
+        );
       }
       onEdited();
     } catch (e) {
       setNotice(null);
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof ApiError && e.code === "local_tts_unavailable") setNeedsLocalConsent(true);
+      else setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -134,7 +175,7 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
     setError(null);
     setWarning(null);
     setNeedsConsent(false);
-    setNotice(allowInstall ? "Installing whisper-cpp and transcribing — the first run downloads a speech model and can take several minutes…" : "Transcribing…");
+    setNotice(allowInstall ? "Setting up local transcription: building whisper.cpp in Memotion's cache folder, then downloading a speech model (about 470 MB). This can take several minutes the first time…" : "Transcribing…");
     try {
       const res = await api.transcribeMedia(project.id, selectedMedia, captionRequest(), { allowInstall });
       setNotice(`Transcribed ${res.words.length} words. Captions are on the timeline.`);
@@ -169,7 +210,8 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
                 {(Object.keys(VENDOR_LABEL) as Vendor[]).map((v) => (
                   <option key={v} value={v}>
                     {VENDOR_LABEL[v]}
-                    {v !== "edge" && !keys[v] ? " — needs key" : ""}
+                    {(v === "openai" || v === "elevenlabs") && !keys[v] ? " — needs key" : ""}
+                    {v === "local" && localTts?.supported && !localTts.engine ? " — download needed" : ""}
                   </option>
                 ))}
               </select>
@@ -184,10 +226,21 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
             </label>
           </div>
 
-          {vendorNeedsKey && (
+          {localUnsupported && <div className="notice warn" style={{ margin: 0 }}>Offline voices are not available on this computer yet. Use Edge TTS instead.</div>}
+          {needsLocalConsent && (
+            <div className="notice warn" style={{ margin: 0 }}>
+              The offline voice needs a one-time download: the speech engine (about 37 MB, from npm) and this voice (about {localTts?.voiceSizes[voice] ?? 21} MB, from the sherpa-onnx project on GitHub).
+              Both are checked against published checksums and stored in Memotion's own data folder. Afterwards it works without internet. Nothing else on your computer changes.
+              <div className="row" style={{ marginTop: 8 }}>
+                <button className="primary" onClick={() => void installLocal()} disabled={busy}>Download</button>
+                <button onClick={() => setNeedsLocalConsent(false)}>Not now</button>
+              </div>
+            </div>
+          )}
+          {vendorNeedsKey && keyVendor && (
             <div className="row">
               <label>
-                {VENDOR_LABEL[vendor]} API key (stored in the system keychain)
+                {VENDOR_LABEL[keyVendor]} API key (stored in the system keychain)
                 <input type="password" value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} placeholder="paste key" autoComplete="off" />
               </label>
               <button onClick={() => void saveKey()} disabled={keyDraft.trim().length < 8}>Save key</button>
@@ -208,7 +261,7 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
             </label>
           </div>
 
-          <button className="primary" onClick={() => void generate()} disabled={!text.trim() || busy || vendorNeedsKey}>
+          <button className="primary" onClick={() => void generate()} disabled={!text.trim() || busy || vendorNeedsKey || localUnsupported}>
             {busy ? "Working…" : "Generate voice & captions"}
           </button>
         </div>
@@ -266,7 +319,7 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
           </div>
           {needsConsent && (
             <div className="notice warn" style={{ margin: 0 }}>
-              Local transcription needs <code>whisper-cpp</code>. Allowing this runs <code>brew install whisper-cpp</code> and downloads a speech model (hundreds of MB).
+              Local transcription needs <code>whisper.cpp</code>. Allowing this downloads its source and builds it inside Memotion's cache folder (needs git, cmake and a C compiler; a few minutes; nothing outside that folder changes), then downloads a speech model (about 470 MB).
               Or skip the install: pick the OpenAI engine above and save your OpenAI key there; transcription then uses cloud Whisper.
               <div className="row" style={{ marginTop: 8 }}>
                 <button className="primary" onClick={() => void transcribe(true)} disabled={busy}>Install and transcribe</button>

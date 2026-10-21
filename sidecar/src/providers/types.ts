@@ -8,6 +8,8 @@ export const ProviderInput = z.object({
   baseURL: z.string().url(),
   /** Default model id sent in the `model` field. */
   model: z.string().min(1),
+  /** Model for `POST {baseURL}/images/generations`, when the provider offers one (e.g. gpt-image-1). */
+  imageModel: z.string().max(80).optional(),
   /** Extra headers (e.g. OpenRouter's HTTP-Referer). Never put secrets here; use the key. */
   headers: z.record(z.string(), z.string()).default({}),
   capabilities: z

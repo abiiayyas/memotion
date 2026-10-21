@@ -6,6 +6,7 @@ import type {
   ChatCompletionMessageToolCall,
 } from "openai/resources/chat/completions";
 import { makeClient } from "../providers/client.js";
+import { buildBrief } from "./brief.js";
 import { getActiveProvider } from "../providers/store.js";
 import { previewEtag, waitPreviewChanged } from "../engine/preview.js";
 import { listMedia, projectPath, readMeta } from "../projects/store.js";
@@ -21,6 +22,8 @@ export type AgentEvent =
   | { type: "error"; message: string };
 
 const MAX_ROUNDS = 30;
+/** Paid images one user message may trigger. A confused or manipulated model must not be able to run up a bill. */
+const MAX_IMAGES_PER_TURN = 4;
 /** Tool output from earlier turns is cut to this when re-sent, to keep long sessions inside the context window. */
 const OLD_TOOL_CHARS = 2_000;
 const IMAGES_OMITTED = "[snapshot images omitted from history]";
@@ -97,17 +100,20 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     const meta = await readMeta(projectId);
     const messages = await loadHistory(projectId);
     const turnStart = messages.length;
+    const imageBudget = { left: MAX_IMAGES_PER_TURN };
     messages.push({ role: "user", content: userText });
     await saveHistory(projectId, messages);
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
       if (signal.aborted) break;
       const media = (await listMedia(projectId)).map((m) => `${m.path} (${m.kind})`);
+      // Re-read the project each round: the user may switch brand kit or format between turns.
+      const brief = await buildBrief(await readMeta(projectId));
       const stream = await client.chat.completions.create(
         {
           model: provider.model,
           stream: true,
-          messages: [{ role: "system", content: systemPrompt(meta, media) }, ...forSend(messages, turnStart)],
+          messages: [{ role: "system", content: systemPrompt(meta, media, brief) }, ...forSend(messages, turnStart)],
           ...(provider.capabilities.tools ? { tools: TOOL_SPECS } : {}),
         },
         { signal },
@@ -161,7 +167,7 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
           results.push({ role: "tool", tool_call_id: call.id, content: "Cancelled by the user." });
           continue;
         }
-        const out = await runTool(projectId, call.function.name, args, { signal, vision: provider.capabilities.vision });
+        const out = await runTool(projectId, call.function.name, args, { signal, vision: provider.capabilities.vision, imageBudget });
         results.push({ role: "tool", tool_call_id: call.id, content: out.content });
         if (out.images) images.push(...out.images);
         changed ||= out.changed === true;

@@ -1,9 +1,14 @@
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectPath, safeJoin } from "../projects/store.js";
 import { getApiKey } from "../providers/store.js";
+import { alignScriptToHeard } from "./align.js";
 import { applyCaptionsToProject } from "./caption.js";
 import { listEdgeVoices, POPULAR_EDGE_VOICES, synthesizeEdge } from "./edge.js";
+import { DEFAULT_LOCAL_VOICE, LOCAL_VOICES, localVoiceOptions, splitWords, synthesizeLocal, wavToMp3 } from "./localTts.js";
+import { findWhisperBinary, whisperModelPath } from "./whisperSetup.js";
 import { listElevenLabsVoices, synthesizeElevenLabs } from "./elevenlabs.js";
 import { OPENAI_VOICES, synthesizeOpenAi } from "./openai.js";
 import { transcribeFile, type TranscribeOptions } from "./transcribe.js";
@@ -12,6 +17,7 @@ import type { CaptionRequest, TtsRequest, VoiceOption, WordTiming } from "./type
 export * from "./types.js";
 export * from "./caption.js";
 export * from "./edge.js";
+export * from "./localTts.js";
 export * from "./transcribe.js";
 
 export async function listAllVoices(): Promise<VoiceOption[]> {
@@ -26,7 +32,7 @@ export async function listAllVoices(): Promise<VoiceOption[]> {
       // ignore
     }
   }
-  return [...edge, ...openai, ...eleven];
+  return [...localVoiceOptions(), ...edge, ...openai, ...eleven];
 }
 
 export async function generateSpeechAndCaptions(
@@ -54,6 +60,35 @@ export async function generateSpeechAndCaptions(
     audioBytes = res.audioBytes;
     duration = res.duration;
     words = res.words;
+  } else if (req.provider === "local") {
+    const voiceId = req.voice && LOCAL_VOICES[req.voice] ? req.voice : DEFAULT_LOCAL_VOICE;
+    const scratch = join(tmpdir(), `memotion-local-tts-${process.pid}-${Date.now()}`);
+    await mkdir(scratch, { recursive: true });
+    try {
+      const wav = join(scratch, "speech.wav");
+      const mp3 = join(scratch, "speech.mp3");
+      const res = await synthesizeLocal(req.text, voiceId, req.rate, wav);
+      await wavToMp3(wav, mp3);
+      audioBytes = await readFile(mp3);
+      duration = res.duration;
+      words = res.words;
+      timingEstimated = true;
+      // When whisper is already installed (never installed for this), measure real word times instead of guessing.
+      const locale = LOCAL_VOICES[voiceId]?.locale.slice(0, 2);
+      if (findWhisperBinary() && existsSync(whisperModelPath("base"))) {
+        try {
+          const heard = await transcribeFile(mp3, { engine: "local", language: locale, model: "base", allowInstall: false });
+          if (heard.words.length > 0) {
+            words = alignScriptToHeard(splitWords(req.text), heard.words, duration);
+            timingEstimated = false;
+          }
+        } catch {
+          // The estimate stays; the caller is told it is an estimate.
+        }
+      }
+    } finally {
+      await rm(scratch, { recursive: true, force: true });
+    }
   } else {
     // Default: Edge TTS (free, no API key required)
     const res = await synthesizeEdge(req.text, req.voice, req.rate);

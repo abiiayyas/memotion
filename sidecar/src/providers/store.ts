@@ -8,16 +8,35 @@ const SERVICE = "memotion";
 interface ConfigFile {
   providers: ProviderConfig[];
   activeProviderId: string | null;
+  /** Master switch for paid image generation. Off until the user turns it on. */
+  imageGeneration: boolean;
 }
 
 function read(): ConfigFile {
   const path = configPath();
-  if (!existsSync(path)) return { providers: [], activeProviderId: null };
+  if (!existsSync(path)) return { providers: [], activeProviderId: null, imageGeneration: false };
   const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<ConfigFile>;
   return {
     providers: (raw.providers ?? []).map((p) => ProviderInput.parse(p)),
     activeProviderId: raw.activeProviderId ?? null,
+    imageGeneration: raw.imageGeneration === true,
   };
+}
+
+export function isImageGenerationEnabled(): boolean {
+  return read().imageGeneration;
+}
+
+export function setImageGenerationEnabled(on: boolean): void {
+  write({ ...read(), imageGeneration: on });
+}
+
+/** The provider that will draw images: the active one if it can, else the first that can. */
+export function getImageProvider(): ProviderConfig | undefined {
+  const cfg = read();
+  const can = (p: ProviderConfig): boolean => p.capabilities.images && Boolean(p.imageModel);
+  const active = cfg.providers.find((p) => p.id === cfg.activeProviderId);
+  return active && can(active) ? active : cfg.providers.find(can);
 }
 
 function write(cfg: ConfigFile): void {

@@ -12,12 +12,12 @@ export interface VoiceOption {
   name: string;
   locale: string;
   gender?: string;
-  provider: "edge" | "openai" | "elevenlabs";
+  provider: "edge" | "openai" | "elevenlabs" | "local";
 }
 
 export const TtsRequest = z.object({
   text: z.string().min(1).max(10_000),
-  provider: z.enum(["edge", "openai", "elevenlabs"]).default("edge"),
+  provider: z.enum(["edge", "openai", "elevenlabs", "local"]).default("edge"),
   voice: z.string().optional(),
   rate: z.number().min(0.5).max(2.0).default(1.0),
 });

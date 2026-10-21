@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   CaptionRequest,
   TtsRequest,
+  LocalTtsStatus,
   VoiceOption,
   WordTiming,
   AgentEvent,
@@ -19,6 +20,15 @@ import type {
   TestResult,
   TimelineView,
   VariableValue,
+  AppSettings,
+  BrandKit,
+  CaptureResult,
+  FileVariables as TemplateVariables,
+  Format,
+  RemotionAnalysis,
+  RemotionImport,
+  TemplateInfo,
+  VariableFill,
 } from "./types";
 
 export interface Connection {
@@ -98,6 +108,17 @@ export async function rawUrl(projectId: string, path: string): Promise<string> {
   return `${c.base}/projects/${projectId}/raw/${encoded}?token=${c.token}`;
 }
 
+/** `<img>` URL for a brand kit's logo. The query string busts the cache after the logo is replaced. */
+export async function brandLogoUrl(kitId: string, version: string): Promise<string> {
+  const c = await connect();
+  return `${c.base}/brand-kits/${kitId}/raw/logo?token=${c.token}&v=${encodeURIComponent(version)}`;
+}
+
+export async function templateThumbUrl(templateId: string): Promise<string> {
+  const c = await connect();
+  return `${c.base}/templates/${templateId}/raw/thumb?token=${c.token}`;
+}
+
 /** Parse a fetch() SSE body into (event, data) pairs. EventSource cannot send the Authorization header. */
 async function* sse(res: Response): AsyncGenerator<{ event: string; data: string }> {
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
@@ -150,6 +171,8 @@ export const api = {
     request<EditResult>("PUT", `/projects/${id}/variables`, { file, id: variable, value }),
 
   voices: () => request<{ voices: VoiceOption[] }>("GET", "/voices"),
+  localTts: () => request<LocalTtsStatus>("GET", "/tts-local"),
+  installLocalTts: (voice: string) => request<LocalTtsStatus & { ok: true }>("POST", "/tts-local/install", { voice }),
   generateSpeech: (projectId: string, tts: TtsRequest, caption?: CaptionRequest) =>
     request<{ ok: boolean; audioPath: string; duration: number; words: WordTiming[]; captionsFile?: string; timingEstimated: boolean }>(
       "POST",
@@ -166,6 +189,33 @@ export const api = {
   ttsKeys: () => request<{ openai: boolean; elevenlabs: boolean }>("GET", "/tts-keys"),
   saveTtsKey: (vendor: "openai" | "elevenlabs", apiKey: string) => request<{ ok: true }>("PUT", `/tts-keys/${vendor}`, { apiKey }),
   removeElevenLabsKey: () => request<{ ok: true }>("DELETE", "/tts-keys/elevenlabs"),
+
+  brandKits: () => request<BrandKit[]>("GET", "/brand-kits"),
+  saveBrandKit: (kit: Omit<BrandKit, "logo" | "customFonts">) => request<BrandKit>("PUT", `/brand-kits/${kit.id}`, kit),
+  deleteBrandKit: (id: string) => request<{ ok: true }>("DELETE", `/brand-kits/${id}`),
+  setBrandLogo: (id: string, path: string) => request<BrandKit>("POST", `/brand-kits/${id}/logo`, { path }),
+  addBrandFont: (id: string, path: string, family: string) => request<BrandKit>("POST", `/brand-kits/${id}/fonts`, { path, family }),
+  removeBrandFont: (id: string, family: string) => request<BrandKit>("DELETE", `/brand-kits/${id}/fonts/${encodeURIComponent(family)}`),
+  brandFromSite: (name: string, colors: string[], fonts: string[]) => request<BrandKit>("POST", "/brand-kits/from-site", { name, colors, fonts }),
+  applyBrand: (projectId: string, kitId: string | null) => request<{ ok: true }>("POST", `/projects/${projectId}/brand`, { kitId }),
+
+  formats: () => request<Format[]>("GET", "/formats"),
+  setFormat: (projectId: string, formatId: string | null) => request<{ ok: true }>("PUT", `/projects/${projectId}/format`, { formatId }),
+
+  templates: () => request<TemplateInfo[]>("GET", "/templates"),
+  deleteTemplate: (id: string) => request<{ ok: true }>("DELETE", `/templates/${id}`),
+  templateVariables: (id: string) => request<TemplateVariables[]>("GET", `/templates/${id}/variables`),
+  saveTemplate: (projectId: string, name: string, description: string) => request<TemplateInfo>("POST", `/projects/${projectId}/save-template`, { name, description }),
+  createFromTemplate: (templateId: string, name: string, fills: VariableFill[]) => request<Project>("POST", "/projects/from-template", { templateId, name, fills }),
+
+  importHyperframes: (path: string, name?: string) => request<Project>("POST", "/projects/import/hyperframes", { path, name }),
+  analyzeRemotion: (path: string) => request<RemotionAnalysis>("POST", "/projects/import/remotion/analyze", { path }),
+  importRemotion: (path: string, name: string | undefined, force: boolean) => request<RemotionImport>("POST", "/projects/import/remotion", { path, name, force }),
+
+  capture: (projectId: string, url: string) => request<CaptureResult>("POST", `/projects/${projectId}/capture`, { url }),
+  settings: () => request<AppSettings>("GET", "/settings"),
+  setImageGeneration: (enabled: boolean) => request<AppSettings>("PUT", "/settings/image-generation", { enabled }),
+  generateImage: (projectId: string, prompt: string, shape: "square" | "landscape" | "portrait") => request<{ path: string }>("POST", `/projects/${projectId}/images`, { prompt, shape }),
 
   history: (id: string) => request<ChatItem[]>("GET", `/projects/${id}/chat`),
   clearHistory: (id: string) => request<{ ok: true }>("DELETE", `/projects/${id}/chat`),

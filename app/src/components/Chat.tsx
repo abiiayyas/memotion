@@ -20,11 +20,16 @@ export function Chat({
   onFilesChanged,
   hasProvider,
   openSettings,
+  autoSend,
+  onAutoSent,
 }: {
   project: Project;
   onFilesChanged: () => void;
   hasProvider: boolean;
   openSettings: () => void;
+  /** A message another panel wants sent (e.g. the Remotion conversion brief). Sent once, then cleared. */
+  autoSend: string | null;
+  onAutoSent: () => void;
 }) {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
@@ -34,17 +39,32 @@ export function Chat({
 
   useEffect(() => {
     setItems([]);
-    api.history(project.id).then(setItems, () => setItems([]));
+    // A message sent before the history arrives (an automatic one) must not be wiped by the late response.
+    api.history(project.id).then((h) => setItems((prev) => (prev.length > 0 ? prev : h)), () => undefined);
   }, [project.id]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [items]);
 
-  async function send() {
-    const message = text.trim();
+  const autoSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!autoSend) {
+      autoSentRef.current = null; // the queue is empty again: the same message may be queued once more later
+      return;
+    }
+    // The ref also guards React StrictMode's second effect run in development.
+    if (!hasProvider || busy || autoSentRef.current === autoSend) return;
+    autoSentRef.current = autoSend;
+    onAutoSent();
+    void send(autoSend);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend, hasProvider, busy]);
+
+  async function send(override?: string) {
+    const message = (override ?? text).trim();
     if (!message || busy) return;
-    setText("");
+    if (override === undefined) setText("");
     setBusy(true);
     setItems((prev) => [...prev, { kind: "user", text: message }]);
     const ctl = new AbortController();
