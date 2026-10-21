@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, templateThumbUrl } from "../api";
+import logoMark from "../assets/logo-mark.png";
 import type { FileVariables, Format, Orientation, Project, TemplateInfo, Variable, VariableFill, VariableValue } from "../types";
 
 function FillField({ v, value, onChange }: { v: Variable; value: VariableValue; onChange: (value: VariableValue) => void }) {
@@ -147,7 +148,10 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="brand">Memotion</div>
+      <div className="brand-head">
+        <img className="brand-logo" src={logoMark} alt="" />
+        Memotion
+      </div>
       {creating ? (
         <form className="new" onSubmit={(e) => { e.preventDefault(); void create(); }}>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={template ? template.name : "Video name"} />

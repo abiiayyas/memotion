@@ -17,6 +17,10 @@ React UI  ◀── HTTP + SSE ─────────────┤  hyper
 - **Snapshots** are shown to the model only if the provider is marked `vision`.
 - **Telemetry**: every CLI child runs with `HYPERFRAMES_NO_TELEMETRY=1`, no update check, no skill install.
 
+## Logo and icons
+
+The master logo is `assets/logo_memotion.png` (10000×10000, transparent). Derived files, all made from it: `assets/app-icon-1024.png` (the mark on a dark rounded square with a 100 px transparent margin, as macOS expects), `app/src/assets/logo-mark.png` (tight crop, sidebar), `app/public/favicon.png`, and the whole `app/src-tauri/icons/` set, generated with `pnpm --filter app tauri icon ../assets/app-icon-1024.png` (the iOS and Android folders it also writes are deleted: desktop only). To change the logo, replace the master, redo the 1024 icon, and run that command again.
+
 ## Develop
 
 Requires Node 22+, pnpm, Rust, ffmpeg on PATH, and a HyperFrames-supported Chrome (downloaded by the CLI on first use).
