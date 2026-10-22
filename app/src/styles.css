@@ -453,3 +453,13 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .sys-fix { display: block; font-style: normal; color: var(--muted); margin-top: 2px; }
 .system-status.compact { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--err-line); background: var(--err-bg); border-radius: 10px; margin-bottom: 8px; }
 .modal[aria-label="Settings"] { overflow-y: auto; }
+
+/* ── timeline: selection, snapping, lanes ── */
+.tl-bar .toggle.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--text); }
+.tl-guide { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--accent); pointer-events: none; z-index: 4; }
+.tl-marquee { position: absolute; z-index: 5; pointer-events: none; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.tl-lane.drop { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 1px dashed var(--accent); outline-offset: -1px; }
+.tl-lane.ghost { border-bottom: 0; opacity: 0.75; }
+.tl-lane.ghost .tl-label { color: var(--accent); }
+.tl-clip.dragging { transition: none; }
+.tl-content { user-select: none; }

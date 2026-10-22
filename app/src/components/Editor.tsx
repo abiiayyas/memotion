@@ -255,7 +255,7 @@ export function Editor(p: EditorProps) {
       </div>
 
       <section className="timeline-dock" aria-label="Timeline">
-        <Timeline key={project.id} project={project} player={p.player} reloadKey={p.reloadKey} onEdited={p.onReload} />
+        <Timeline key={project.id} project={project} player={p.player} reloadKey={p.reloadKey} onEdited={p.onReload} onAsk={p.onAsk} />
       </section>
 
       {exportSeen && (

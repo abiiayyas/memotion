@@ -106,7 +106,16 @@ export interface TimelineView {
   canRedo: boolean;
 }
 
+export type BatchEdit =
+  | { verb: "move"; ref: string; start: number }
+  | { verb: "trim"; ref: string; start?: number; end?: number }
+  | { verb: "split"; ref: string; at: number }
+  | { verb: "duplicate"; ref: string }
+  | { verb: "delete"; ref: string };
+
 export type EditOp =
+  | { op: "batch"; edits: BatchEdit[] }
+  | { op: "lane"; moves: { ref: string; track: number }[] }
   | { op: "move"; ref: string; start: number; overwrite?: boolean }
   | { op: "trim"; ref: string; start?: number; end?: number; overwrite?: boolean }
   | { op: "split"; ref: string; at: number }

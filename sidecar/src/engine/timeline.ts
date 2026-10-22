@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { runCli } from "./cli.js";
@@ -69,6 +70,11 @@ const TimelineJson = z.looseObject({
 const Entry = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("cli"), receipt: z.unknown() }),
   z.object({ kind: z.literal("length"), before: z.number(), after: z.number() }),
+  /** Lane (data-track-index) changes, which the CLI cannot make. `before` null: the attribute was absent. */
+  z.object({
+    kind: z.literal("lane"),
+    changes: z.array(z.object({ file: z.string(), ref: z.string(), before: z.number().nullable(), after: z.number().nullable() })),
+  }),
 ]);
 type HistoryEntry = z.infer<typeof Entry>;
 
@@ -147,6 +153,14 @@ export async function readTimeline(projectId: string, signal?: AbortSignal): Pro
 /** `#id` or `hf:<id>`. Validated because the value becomes a CLI argument (a leading `-` would be a flag). */
 const Ref = z.string().regex(/^(#[A-Za-z_][\w-]*|hf:[\w-]+)$/);
 
+const BatchEdit = z.discriminatedUnion("verb", [
+  z.object({ verb: z.literal("move"), ref: Ref, start: z.number().min(0) }),
+  z.object({ verb: z.literal("trim"), ref: Ref, start: z.number().min(0).optional(), end: z.number().positive().optional() }).refine((v) => v.start !== undefined || v.end !== undefined),
+  z.object({ verb: z.literal("split"), ref: Ref, at: z.number().positive() }),
+  z.object({ verb: z.literal("duplicate"), ref: Ref }),
+  z.object({ verb: z.literal("delete"), ref: Ref }),
+]);
+
 export const EditOp = z.discriminatedUnion("op", [
   z.object({ op: z.literal("move"), ref: Ref, start: z.number().min(0), overwrite: z.boolean().optional() }),
   z
@@ -163,6 +177,10 @@ export const EditOp = z.discriminatedUnion("op", [
   z.object({ op: z.literal("duplicate"), ref: Ref }),
   z.object({ op: z.literal("delete"), ref: Ref }),
   z.object({ op: z.literal("length"), seconds: z.number().min(0.5).max(3600) }),
+  /** Several edits as one atomic step: all are applied or none, and one undo reverts them all (`timeline apply`). */
+  z.object({ op: z.literal("batch"), edits: z.array(BatchEdit).min(1).max(100) }),
+  /** Move clips to another lane of their own kind. The render never reads lanes; they are for the timeline. */
+  z.object({ op: z.literal("lane"), moves: z.array(z.object({ ref: Ref, track: z.number().int().min(0).max(50) })).min(1).max(100) }),
 ]);
 export type EditOp = z.infer<typeof EditOp>;
 
@@ -177,7 +195,7 @@ const CliEdit = z.looseObject({
 
 const round = (n: number): string => String(Math.round(n * 1000) / 1000);
 
-function cliArgs(op: Exclude<EditOp, { op: "length" }>): string[] {
+function cliArgs(op: Exclude<EditOp, { op: "length" | "batch" | "lane" }>): string[] {
   const overwrite = "overwrite" in op && op.overwrite ? ["--overwrite"] : [];
   switch (op.op) {
     case "move":
@@ -225,6 +243,107 @@ async function applyLength(projectId: string, seconds: number): Promise<{ before
   return { before: patched.before };
 }
 
+/** The CLI's plan form of a batch: one JSON array of `{verb, ref, ...}`, times as strings. */
+export function planFor(edits: Extract<EditOp, { op: "batch" }>["edits"]): unknown[] {
+  return edits.map((e) => {
+    switch (e.verb) {
+      case "move":
+        return { verb: "move", ref: e.ref, time: round(e.start) };
+      case "trim":
+        return { verb: "trim", ref: e.ref, ...(e.start !== undefined ? { start: round(e.start) } : {}), ...(e.end !== undefined ? { end: round(e.end) } : {}) };
+      case "split":
+        return { verb: "split", ref: e.ref, time: round(e.at) };
+      case "duplicate":
+      case "delete":
+        return { verb: e.verb, ref: e.ref };
+    }
+  });
+}
+
+async function runPlan(projectId: string, edits: Extract<EditOp, { op: "batch" }>["edits"], signal?: AbortSignal) {
+  const dir = await mkdtemp(join(tmpdir(), "memotion-plan-"));
+  try {
+    const file = join(dir, "plan.json");
+    await writeFile(file, JSON.stringify(planFor(edits)));
+    return await runCli(["timeline", "apply", file, "--json"], { cwd: projectPath(projectId), signal, timeoutMs: 120_000 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+// ── lanes ────────────────────────────────────────────────────────────────────────────────
+
+/** The opening tag of the element a ref names: `#id` by its id, `hf:x` by its data-hf-id. */
+function findTag(html: string, ref: string): { index: number; tag: string } | null {
+  const name = ref.startsWith("#") ? ref.slice(1) : ref.slice(3);
+  const attr = ref.startsWith("#") ? "id" : "data-hf-id";
+  const wanted = new RegExp(`(?<![\\w-])${attr}=(["'])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\1`);
+  for (const m of html.matchAll(/<[a-zA-Z][^>]*>/g)) if (wanted.test(m[0])) return { index: m.index ?? 0, tag: m[0] };
+  return null;
+}
+
+/** Set (or add, or with null remove) `data-track-index` on one element. Pure, so it can be checked without files. */
+export function setTrackIndex(html: string, ref: string, track: number | null): { html: string; before: number | null } | null {
+  const found = findTag(html, ref);
+  if (!found) return null;
+  const existing = /(?<![\w-])data-track-index=(["'])([^"']*)\1/.exec(found.tag);
+  const before = existing && Number.isFinite(Number(existing[2])) ? Number(existing[2]) : null;
+  let tag: string;
+  if (existing) tag = track === null ? found.tag.replace(new RegExp(`\\s+${existing[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "") : found.tag.replace(existing[0], `data-track-index=${existing[1]}${track}${existing[1]}`);
+  else if (track === null) tag = found.tag;
+  else tag = found.tag.replace(/\s*(\/?)>$/, ` data-track-index="${track}"$1>`);
+  return { html: html.slice(0, found.index) + tag + html.slice(found.index + found.tag.length), before };
+}
+
+type LaneChange = { file: string; ref: string; before: number | null; after: number | null };
+
+async function writeLaneChanges(projectId: string, changes: LaneChange[], direction: "after" | "before"): Promise<string | null> {
+  const root = projectPath(projectId);
+  const byFile = new Map<string, LaneChange[]>();
+  for (const c of changes) byFile.set(c.file, [...(byFile.get(c.file) ?? []), c]);
+  const patched = new Map<string, string>();
+  for (const [file, list] of byFile) {
+    let html = await readFile(join(root, file), "utf8");
+    for (const c of list) {
+      const res = setTrackIndex(html, c.ref, c[direction]);
+      if (!res) return `${c.ref} was not found in ${file}.`;
+      html = res.html;
+    }
+    patched.set(file, html);
+  }
+  // Every file is patched in memory first: a ref that cannot be found must not leave some files changed.
+  for (const [file, html] of patched) {
+    const target = join(root, file);
+    const tmp = `${target}.part`;
+    await writeFile(tmp, html);
+    await rename(tmp, target);
+  }
+  return null;
+}
+
+/** Where `moves` would put the clips, or the reason they cannot go: a lane only holds one clip at a time. */
+export function planLaneMoves(clips: TimelineClip[], moves: { ref: string; track: number }[]): { ok: true; changes: { clip: TimelineClip; track: number }[] } | { ok: false; reason: string } {
+  const chosen = new Map(moves.map((m) => [m.ref, m.track]));
+  const changes: { clip: TimelineClip; track: number }[] = [];
+  for (const m of moves) {
+    const clip = clips.find((c) => c.ref === m.ref);
+    if (!clip) return { ok: false, reason: `${m.ref} is not on the timeline.` };
+    if (clip.trackIndex !== m.track) changes.push({ clip, track: m.track });
+  }
+  if (changes.length === 0) return { ok: false, reason: "Those clips are already in that lane." };
+  const lane = (c: TimelineClip, track: number) => `${c.file}|${c.trackKind}|${c.host ?? ""}|${track}`;
+  const placed = clips.map((c) => ({ c, key: lane(c, chosen.get(c.ref) ?? c.trackIndex) }));
+  for (const a of placed) {
+    for (const b of placed) {
+      if (a.c.ref >= b.c.ref || a.key !== b.key) continue;
+      if (a.c.absStart < b.c.absEnd - 1e-6 && b.c.absStart < a.c.absEnd - 1e-6) {
+        return { ok: false, reason: `${a.c.id} and ${b.c.id} would overlap in that lane.` };
+      }
+    }
+  }
+  return { ok: true, changes };
+}
+
 export function editTimeline(projectId: string, op: EditOp, signal?: AbortSignal): Promise<EditResult> {
   return serialized(projectId, async () => {
     const h = await loadHistory(projectId);
@@ -234,6 +353,20 @@ export function editTimeline(projectId: string, op: EditOp, signal?: AbortSignal
       const res = await applyLength(projectId, op.seconds);
       if ("error" in res) return { ok: false, reason: res.error };
       entry = { kind: "length", before: res.before, after: op.seconds };
+    } else if (op.op === "lane") {
+      const view = await readTimeline(projectId, signal);
+      const plan = planLaneMoves(view.clips, op.moves);
+      if (!plan.ok) return { ok: false, reason: plan.reason };
+      const changes: LaneChange[] = plan.changes.map((x) => ({ file: x.clip.file, ref: x.clip.ref, before: x.clip.trackIndex, after: x.track }));
+      const failed = await writeLaneChanges(projectId, changes, "after");
+      if (failed) return { ok: false, reason: failed };
+      entry = { kind: "lane", changes };
+    } else if (op.op === "batch") {
+      const res = await runPlan(projectId, op.edits, signal);
+      const parsed = CliEdit.safeParse(parseJsonTail(res.stdout) ?? parseJsonTail(res.stderr));
+      if (!parsed.success) return { ok: false, reason: (res.stderr || res.stdout).slice(-500) || `exit ${res.code}` };
+      if (!parsed.data.ok) return { ok: false, reason: (parsed.data.reason ?? "edit refused").replace(/^timeline apply: /, ""), fix: parsed.data.fix };
+      entry = { kind: "cli", receipt: parsed.data.receipt };
     } else {
       const res = await runCli(cliArgs(op), { cwd: projectPath(projectId), signal, timeoutMs: 60_000 });
       // Refusals (`ok:false`) are printed on stderr by some commands, success and others on stdout.
@@ -256,6 +389,10 @@ async function revert(projectId: string, entry: HistoryEntry, signal?: AbortSign
   if (entry.kind === "length") {
     const res = await applyLength(projectId, entry.before);
     return "error" in res ? res : { kind: "length", before: entry.after, after: entry.before };
+  }
+  if (entry.kind === "lane") {
+    const failed = await writeLaneChanges(projectId, entry.changes, "before");
+    return failed ? { error: failed } : { kind: "lane", changes: entry.changes.map((c) => ({ ...c, before: c.after, after: c.before })) };
   }
   const res = await runCli(["timeline", "undo", JSON.stringify(entry.receipt), "--json"], {
     cwd: projectPath(projectId),
