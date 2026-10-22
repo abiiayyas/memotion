@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import { cliEnv, hyperframesBin } from "../config.js";
+import { localizeGsap } from "../projects/gsap.js";
 import { projectPath } from "../projects/store.js";
 
 interface Preview {
@@ -117,6 +118,8 @@ export async function waitPreviewChanged(id: string, before: string | null, time
 export async function withFreshPreview<T>(id: string, op: () => Promise<T>): Promise<T> {
   const before = await previewEtag(id);
   const result = await op();
+  // Whatever the operation wrote (captions, a variable) may load GSAP from the CDN: point it at the local copy.
+  await localizeGsap(id).catch(() => []);
   await waitPreviewChanged(id, before);
   return result;
 }

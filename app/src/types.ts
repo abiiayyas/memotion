@@ -248,6 +248,10 @@ export interface AppSettings {
   imageGeneration: boolean;
   /** Why image generation cannot run right now, or null when it can. */
   imageBlocker: string | null;
+  reviewerProviderId: string | null;
+  /** False when the chosen reviewer no longer works (deleted, lost its key, or no longer marked as able to see). */
+  reviewerWorking: boolean;
+  reviewerChoices: { id: string; name: string; model: string; hasKey: boolean }[];
 }
 
 export type AgentBackend = "api" | "claude" | "codex" | "opencode";
@@ -317,4 +321,11 @@ export interface ChatContext {
   selection?: Selection;
   drawing?: Omit<DrawingAttachment, "thumb">;
   commentIds?: string[];
+}
+
+export interface SystemCheck {
+  name: "FFmpeg" | "FFprobe" | "Chrome";
+  ok: boolean;
+  detail: string;
+  fix?: string;
 }

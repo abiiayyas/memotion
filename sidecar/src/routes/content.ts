@@ -21,8 +21,10 @@ import { getFormat, listFormats } from "../formats/store.js";
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
 import { analyzeRemotionProject, importHyperframesProject, importRemotionProject } from "../projects/import.js";
+import { checkSystem, downloadChrome } from "../engine/system.js";
+import { localizeGsap } from "../projects/gsap.js";
 import { projectPath, updateMeta } from "../projects/store.js";
-import { isImageGenerationEnabled, setImageGenerationEnabled } from "../providers/store.js";
+import { getReviewerProviderId, listProviders, getReviewerProvider, isImageGenerationEnabled, setImageGenerationEnabled, setReviewerProviderId } from "../providers/store.js";
 import { createFromTemplate, deleteTemplate, listTemplates, saveAsTemplate, templateVariables, thumbPath } from "../templates/store.js";
 
 const BUSY = { ok: false, reason: "The director is working on this video. Wait for it to finish." } as const;
@@ -126,14 +128,18 @@ export function registerContentRoutes(app: Hono): void {
         fills: z.array(z.object({ file: z.string(), id: z.string(), value: z.unknown() })).max(100).default([]),
       })
       .parse(await c.req.json());
-    return c.json(await createFromTemplate(body.templateId, body.name, body.fills));
+    const meta = await createFromTemplate(body.templateId, body.name, body.fills);
+    await localizeGsap(meta.id).catch(() => []);
+    return c.json(meta);
   });
 
   // ── importing projects ─────────────────────────────────────
   const ImportBody = z.object({ path: z.string().min(1), name: z.string().trim().max(80).optional() });
   app.post("/projects/import/hyperframes", async (c) => {
     const body = ImportBody.parse(await c.req.json());
-    return c.json(await importHyperframesProject(body.path, body.name));
+    const meta = await importHyperframesProject(body.path, body.name);
+    await localizeGsap(meta.id).catch(() => []); // the imported copy; the original folder is not touched
+    return c.json(meta);
   });
   app.post("/projects/import/remotion/analyze", async (c) => c.json(await analyzeRemotionProject(ImportBody.parse(await c.req.json()).path)));
   app.post("/projects/import/remotion", async (c) => {
@@ -148,7 +154,32 @@ export function registerContentRoutes(app: Hono): void {
     const { url } = z.object({ url: z.string().min(1).max(2000) }).parse(await c.req.json());
     return c.json(await captureWebsite(id, url));
   });
-  app.get("/settings", (c) => c.json({ imageGeneration: isImageGenerationEnabled(), imageBlocker: imageGenerationBlocker() }));
+  const reviewerView = () => ({
+    reviewerProviderId: getReviewerProviderId(),
+    /** False when the chosen reviewer was deleted, lost its key, or is no longer marked as able to see. */
+    reviewerWorking: getReviewerProvider() !== undefined,
+    reviewerChoices: listProviders().providers.filter((p) => p.capabilities.vision).map((p) => ({ id: p.id, name: p.name, model: p.model, hasKey: p.hasKey })),
+  });
+  // What this computer has for previewing and rendering (ffmpeg, Chrome). Nothing is installed without a request.
+  app.get("/system", async (c) => c.json({ checks: await checkSystem() }));
+  app.post("/system/chrome", async (c) => {
+    try {
+      await downloadChrome(c.req.raw.signal);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+    return c.json({ checks: await checkSystem() });
+  });
+  app.get("/settings", (c) => c.json({ imageGeneration: isImageGenerationEnabled(), imageBlocker: imageGenerationBlocker(), ...reviewerView() }));
+  app.put("/settings/reviewer", async (c) => {
+    const { providerId } = z.object({ providerId: z.string().nullable() }).parse(await c.req.json());
+    try {
+      setReviewerProviderId(providerId);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+    }
+    return c.json(reviewerView());
+  });
   app.put("/settings/image-generation", async (c) => {
     setImageGenerationEnabled(z.object({ enabled: z.boolean() }).parse(await c.req.json()).enabled);
     return c.json({ imageGeneration: isImageGenerationEnabled(), imageBlocker: imageGenerationBlocker() });

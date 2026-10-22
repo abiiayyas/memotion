@@ -6,6 +6,7 @@ import type {
   AgentsInfo,
   ChatContext,
   LocalTtsStatus,
+  SystemCheck,
   MarkComment,
   Target,
   VoiceOption,
@@ -225,6 +226,9 @@ export const api = {
 
   capture: (projectId: string, url: string) => request<CaptureResult>("POST", `/projects/${projectId}/capture`, { url }),
   settings: () => request<AppSettings>("GET", "/settings"),
+  system: () => request<{ checks: SystemCheck[] }>("GET", "/system"),
+  downloadChrome: () => request<{ checks: SystemCheck[] }>("POST", "/system/chrome"),
+  setReviewer: (providerId: string | null) => request<AppSettings>("PUT", "/settings/reviewer", { providerId }),
   setImageGeneration: (enabled: boolean) => request<AppSettings>("PUT", "/settings/image-generation", { enabled }),
   generateImage: (projectId: string, prompt: string, shape: "square" | "landscape" | "portrait") => request<{ path: string }>("POST", `/projects/${projectId}/images`, { prompt, shape }),
 

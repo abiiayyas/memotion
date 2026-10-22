@@ -3,15 +3,16 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHECK_REMINDER, loadHistory, runAgent, type AgentEvent } from "../src/agent/loop.js";
+import { CHECK_REMINDER, loadHistory, REVIEW_REMINDER, runAgent, type AgentEvent } from "../src/agent/loop.js";
 import { systemPrompt } from "../src/agent/prompt.js";
 import { TOOL_SPECS } from "../src/agent/tools.js";
 import { createProject, projectPath, readMeta } from "../src/projects/store.js";
-import { setImageGenerationEnabled, upsertProvider } from "../src/providers/store.js";
+import { setImageGenerationEnabled, setReviewerProviderId, upsertProvider } from "../src/providers/store.js";
 
 const dataDir = mkdtempSync(join(tmpdir(), "memotion-agent-tools-"));
 process.env.MEMOTION_DATA_DIR = dataDir;
 process.env.MEMOTION_API_KEY_TOOLMOCK = "sk-test";
+process.env.MEMOTION_API_KEY_SEER = "sk-test";
 afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
 
 const PNG_B64 = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]).toString("base64");
@@ -190,3 +191,69 @@ describe("the director's discipline", () => {
     expect(ev.at(-1)?.type).toBe("done");
   });
 });
+
+describe("the reviewer and the director's discipline", () => {
+  let mock: ReturnType<typeof mockProvider>;
+  const script: Delta[][] = [];
+  let projectId = "";
+
+  beforeAll(async () => {
+    mock = mockProvider(script);
+    await new Promise<void>((r) => mock.server.listen(0, "127.0.0.1", r));
+    const a = mock.server.address();
+    const base = typeof a === "object" && a ? `http://127.0.0.1:${a.port}/v1` : "";
+    upsertProvider({ id: "toolmock", name: "Tool Mock", baseURL: base, model: "m", capabilities: { tools: true, vision: false, images: false } });
+    upsertProvider({ id: "seer", name: "Seer", baseURL: base, model: "eyes", capabilities: { tools: true, vision: true, images: false } });
+    projectId = (await createProject({ name: "Reviewer loop", orientation: "landscape" })).id;
+  }, 120_000);
+  afterAll(() => {
+    mock.server.close();
+    setReviewerProviderId(null);
+  });
+
+  const system = () => String(mock.requests.at(-1)!.messages.find((m) => m.role === "system")?.content);
+
+  it("with a reviewer, a blind director that changed files is reminded once to call review, after the check reminder", async () => {
+    setReviewerProviderId("seer");
+    const before = mock.requests.length;
+    script.push(
+      [call(0, "w1", "write_file", { path: "compositions/note.html", content: "<div>hi</div>" })],
+      [{ content: "Done." }], // no check: check reminder
+      [{ content: "Done again." }], // no review: review reminder
+      [{ content: "Really done." }], // insists: accepted
+    );
+    const ev = await collect(projectId, "add a note scene");
+    expect(mock.requests.length - before).toBe(4);
+    expect(lastUserOf(mock, 2)).toBe(CHECK_REMINDER);
+    expect(lastUserOf(mock, 1)).toBe(REVIEW_REMINDER);
+    expect(system()).toMatch(/# Reviewer/);
+    expect(ev.some((e) => e.type === "error")).toBe(false);
+    expect(JSON.stringify(await loadHistory(projectId))).not.toContain("Automatic reminder");
+  });
+
+  it("without a reviewer, the prompt does not mention one and nobody is asked to review", async () => {
+    setReviewerProviderId(null);
+    const before = mock.requests.length;
+    script.push([call(0, "w2", "write_file", { path: "compositions/note2.html", content: "<div>hi</div>" })], [{ content: "Done." }], [{ content: "Done again." }]);
+    await collect(projectId, "add another");
+    expect(mock.requests.length - before).toBe(3); // one check reminder, no review reminder
+    expect(system()).not.toMatch(/# Reviewer/);
+    expect(mock.requests.some((r) => r.messages.some((m) => m.content === REVIEW_REMINDER))).toBe(true); // from the first test only
+    expect(lastUserOf(mock, 1)).toBe(CHECK_REMINDER);
+  });
+
+  it("a director that can see itself gets no reviewer even when one is set up", async () => {
+    setReviewerProviderId("seer");
+    const a = mock.server.address();
+    const base = typeof a === "object" && a ? `http://127.0.0.1:${a.port}/v1` : "";
+    upsertProvider({ id: "toolmock", name: "Tool Mock", baseURL: base, model: "m", capabilities: { tools: true, vision: true, images: false } });
+    script.push([{ content: "hello" }]);
+    await collect(projectId, "hi");
+    expect(system()).not.toMatch(/# Reviewer/);
+    setReviewerProviderId(null);
+  });
+});
+
+function lastUserOf(m: { requests: { messages: { role: string; content: unknown }[] }[] }, fromEnd: number): unknown {
+  return m.requests.at(-fromEnd)!.messages.filter((x) => x.role === "user").at(-1)?.content;
+}

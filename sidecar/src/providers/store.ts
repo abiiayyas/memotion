@@ -12,6 +12,8 @@ interface ConfigFile {
   imageGeneration: boolean;
   /** Who writes the video: the active API provider, or a coding-agent CLI installed on this computer. */
   agentBackend: AgentBackend;
+  /** A provider whose model can see images and judges rendered frames for a director that cannot. */
+  reviewerProviderId: string | null;
 }
 
 export type AgentBackend = "api" | "claude" | "codex" | "opencode";
@@ -23,14 +25,36 @@ export function isAgentBackend(v: string): v is AgentBackend {
 
 function read(): ConfigFile {
   const path = configPath();
-  if (!existsSync(path)) return { providers: [], activeProviderId: null, imageGeneration: false, agentBackend: "api" };
+  if (!existsSync(path)) return { providers: [], activeProviderId: null, imageGeneration: false, agentBackend: "api", reviewerProviderId: null };
   const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<ConfigFile>;
   return {
     providers: (raw.providers ?? []).map((p) => ProviderInput.parse(p)),
     activeProviderId: raw.activeProviderId ?? null,
     imageGeneration: raw.imageGeneration === true,
     agentBackend: raw.agentBackend && isAgentBackend(raw.agentBackend) ? raw.agentBackend : "api",
+    reviewerProviderId: typeof raw.reviewerProviderId === "string" ? raw.reviewerProviderId : null,
   };
+}
+
+/** The reviewer, only if it still exists, can see images, and has a key. Otherwise there is no reviewer. */
+export function getReviewerProvider(): ProviderConfig | undefined {
+  const cfg = read();
+  const p = cfg.providers.find((x) => x.id === cfg.reviewerProviderId);
+  return p && p.capabilities.vision && getApiKey(p.id) ? p : undefined;
+}
+
+export function getReviewerProviderId(): string | null {
+  return read().reviewerProviderId;
+}
+
+export function setReviewerProviderId(id: string | null): void {
+  const cfg = read();
+  if (id !== null) {
+    const p = cfg.providers.find((x) => x.id === id);
+    if (!p) throw new Error("Unknown provider.");
+    if (!p.capabilities.vision) throw new Error(`${p.name} is not marked as able to see images. Turn on "Can see images" for it in its settings first.`);
+  }
+  write({ ...cfg, reviewerProviderId: id });
 }
 
 export function getAgentBackend(): AgentBackend {

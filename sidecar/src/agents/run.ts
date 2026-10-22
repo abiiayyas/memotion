@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { buildBrief } from "../agent/brief.js";
+import { localizeGsap } from "../projects/gsap.js";
 import { claimProject, loadHistory, recordTurn, type AgentEvent } from "../agent/loop.js";
 import { systemPrompt } from "../agent/prompt.js";
 import { selfPort } from "../config.js";
+import { getReviewerProvider } from "../providers/store.js";
 import { previewEtag, waitPreviewChanged } from "../engine/preview.js";
 import { listMedia, projectPath, readMeta } from "../projects/store.js";
 import { childEnv, CLI_SPECS, findOnPath, type CliId } from "./cli.js";
@@ -186,7 +188,9 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
 
     const meta = await readMeta(projectId);
     const media = (await listMedia(projectId)).map((m) => `${m.path} (${m.kind})`);
-    const system = systemPrompt(meta, media, await buildBrief(meta), true);
+    const brief = await buildBrief(meta);
+    brief.reviewer = getReviewerProvider() !== undefined;
+    const system = systemPrompt(meta, media, brief, true);
     const cwd = projectPath(projectId);
     const isolatedConfigDir = await mkdtemp(join(tmpdir(), "memotion-cfg-"));
     cleanup.push(() => rm(isolatedConfigDir, { recursive: true, force: true }));
@@ -250,6 +254,7 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
     signal.removeEventListener("abort", onAbort);
 
     await recordTurn(projectId, userText, finalText);
+    if ((await localizeGsap(projectId).catch(() => [])).length > 0) dirty = true;
     if (dirty || lastReload > 0) yield { type: "files-changed" };
 
     if (signal.aborted) {

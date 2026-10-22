@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Preset, Provider, TestResult } from "../types";
 import { AgentPicker } from "./AgentPicker";
+import { ReviewerPicker } from "./ReviewerPicker";
+import { SystemStatus } from "./SystemStatus";
 
 interface Draft {
   id: string;
@@ -125,6 +127,8 @@ export function Settings({ onClose, onChanged }: { onClose: () => void; onChange
           <button onClick={onClose} aria-label="Close">✕</button>
         </div>
         <AgentPicker onChanged={onChanged} />
+        <ReviewerPicker refreshKey={providers.map((p) => `${p.id}:${p.capabilities.vision}:${p.hasKey}`).join(",")} />
+        <SystemStatus />
         <h3 style={{ margin: "14px 0 6px", padding: "0 18px" }}>AI providers</h3>
         <div className="settings">
           <div className="providers">

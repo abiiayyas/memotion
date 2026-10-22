@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Hono } from "hono";
 import { z } from "zod";
 import { MAX_IMAGES_PER_TURN } from "../agent/loop.js";
+import { MAX_REVIEWS_PER_TURN } from "../agent/review.js";
 import { runTool, TOOL_SPECS } from "../agent/tools.js";
 import { projectPath } from "../projects/store.js";
 import { existsSync } from "node:fs";
@@ -14,6 +15,7 @@ const MCP_TOOLS: Record<string, true> = {
   list_media: true,
   check: true,
   snapshot: true,
+  review: true,
   read_docs: true,
   generate_voiceover: true,
   transcribe_and_caption: true,
@@ -25,6 +27,7 @@ interface RunScope {
   projectId: string;
   signal: AbortSignal;
   imageBudget: { left: number };
+  reviewBudget: { left: number };
 }
 
 const scopes: Record<string, RunScope | undefined> = {};
@@ -39,7 +42,7 @@ export interface OpenScope {
 /** A capability for one agent run: the token in the URL is the only credential, and it dies with the run. */
 export function openRunScope(projectId: string, signal: AbortSignal): OpenScope {
   const token = randomBytes(24).toString("hex");
-  scopes[token] = { projectId, signal, imageBudget: { left: MAX_IMAGES_PER_TURN } };
+  scopes[token] = { projectId, signal, imageBudget: { left: MAX_IMAGES_PER_TURN }, reviewBudget: { left: MAX_REVIEWS_PER_TURN } };
   return {
     token,
     path: `/mcp/${token}`,
@@ -95,7 +98,7 @@ export function registerMcpRoutes(app: Hono): void {
       const call = CallParams.safeParse(params);
       if (!call.success || !MCP_TOOLS[call.data.name]) return fail(-32602, "Unknown tool");
       if (!existsSync(projectPath(scope.projectId))) return fail(-32000, "The project no longer exists");
-      const out = await runTool(scope.projectId, call.data.name, call.data.arguments ?? {}, { signal: scope.signal, vision: true, imageBudget: scope.imageBudget });
+      const out = await runTool(scope.projectId, call.data.name, call.data.arguments ?? {}, { signal: scope.signal, vision: true, imageBudget: scope.imageBudget, reviewBudget: scope.reviewBudget });
       const images = (out.images ?? []).map((png) => ({ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }));
       return reply({ content: [{ type: "text", text: out.content }, ...images], isError: !out.ok });
     }

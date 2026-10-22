@@ -444,3 +444,12 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .chat-head { gap: 8px; justify-content: flex-start; }
 .chat-head .grow { flex: 1; }
 .chat-head .icon-btn { margin-left: -6px; flex: none; }
+.reviewer-select select { max-width: 420px; }
+
+.sys-row { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; }
+.sys-row .sys-mark { width: 16px; flex: none; text-align: center; font-weight: 700; }
+.sys-row.ok .sys-mark { color: var(--ok); }
+.sys-row.bad .sys-mark { color: var(--bad); }
+.sys-fix { display: block; font-style: normal; color: var(--muted); margin-top: 2px; }
+.system-status.compact { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--err-line); background: var(--err-bg); border-radius: 10px; margin-bottom: 8px; }
+.modal[aria-label="Settings"] { overflow-y: auto; }

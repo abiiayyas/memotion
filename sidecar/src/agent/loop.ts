@@ -6,8 +6,10 @@ import type {
   ChatCompletionMessageToolCall,
 } from "openai/resources/chat/completions";
 import { makeClient } from "../providers/client.js";
+import { localizeGsap } from "../projects/gsap.js";
 import { buildBrief } from "./brief.js";
-import { getActiveProvider } from "../providers/store.js";
+import { getActiveProvider, getReviewerProvider } from "../providers/store.js";
+import { MAX_REVIEWS_PER_TURN } from "./review.js";
 import { previewEtag, waitPreviewChanged } from "../engine/preview.js";
 import { listMedia, projectPath, readMeta } from "../projects/store.js";
 import { systemPrompt } from "./prompt.js";
@@ -24,6 +26,8 @@ export type AgentEvent =
 /** Tool rounds one user message may take. A real video (docs, scenes, fixes) used all of 30 in a measured DeepSeek run. */
 const MAX_ROUNDS = 60;
 /** Sent once, only for the next request and never stored, when the model wants to finish without having checked its work. */
+export const REVIEW_REMINDER =
+  "Automatic reminder: you changed files since the last review. Call `review` now (the reviewer can see the frames, `check` cannot), fix what it reports that is real, then finish with your summary.";
 export const CHECK_REMINDER =
   "Automatic reminder: you changed files but did not run `check` afterwards. Run `check` now, fix every error it reports, then finish with your summary.";
 /** Paid images one user message may trigger. A confused or manipulated model must not be able to run up a bill. */
@@ -121,6 +125,7 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     const messages = await loadHistory(projectId);
     const turnStart = messages.length;
     const imageBudget = { left: MAX_IMAGES_PER_TURN };
+    const reviewBudget = { left: MAX_REVIEWS_PER_TURN };
     messages.push({ role: "user", content: userText });
     // An annotated frame from the user goes to a model that can see it, as a second message so the text stays in history.
     if (attached.length > 0 && provider.capabilities.vision) {
@@ -135,19 +140,23 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     await saveHistory(projectId, messages);
 
     let checkedSinceChange = true;
-    let reminder = false;
+    let reviewedSinceChange = true;
+    let reminder: string | null = null;
     let reminded = false;
+    let reviewReminded = false;
     let finished = false;
     for (let round = 0; round < MAX_ROUNDS; round++) {
       if (signal.aborted) break;
       const media = (await listMedia(projectId)).map((m) => `${m.path} (${m.kind})`);
       // Re-read the project each round: the user may switch brand kit or format between turns.
       const brief = await buildBrief(await readMeta(projectId));
+      // A director that can see already gets the snapshots; a reviewer is for one that cannot.
+      brief.reviewer = getReviewerProvider() !== undefined && !provider.capabilities.vision;
       const stream = await client.chat.completions.create(
         {
           model: provider.model,
           stream: true,
-          messages: [{ role: "system", content: systemPrompt(meta, media, brief) }, ...forSend(messages, turnStart), ...(reminder ? [{ role: "user" as const, content: CHECK_REMINDER }] : [])],
+          messages: [{ role: "system", content: systemPrompt(meta, media, brief) }, ...forSend(messages, turnStart), ...(reminder ? [{ role: "user" as const, content: reminder }] : [])],
           ...(provider.capabilities.tools ? { tools: TOOL_SPECS } : {}),
         },
         { signal },
@@ -171,12 +180,17 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
       }
 
       const done = calls.filter((c) => c.name);
-      reminder = false;
+      reminder = null;
       if (done.length === 0) {
         // Weaker models skip verification however the prompt words it. Ask once; the draft answer is not kept.
         if (!checkedSinceChange && !reminded) {
           reminded = true;
-          reminder = true;
+          reminder = CHECK_REMINDER;
+          continue;
+        }
+        if (brief.reviewer && !reviewedSinceChange && !reviewReminded) {
+          reviewReminded = true;
+          reminder = REVIEW_REMINDER;
           continue;
         }
         messages.push({ role: "assistant", content: text });
@@ -209,12 +223,16 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
           results.push({ role: "tool", tool_call_id: call.id, content: "Cancelled by the user." });
           continue;
         }
-        const out = await runTool(projectId, call.function.name, args, { signal, vision: provider.capabilities.vision, imageBudget });
+        const out = await runTool(projectId, call.function.name, args, { signal, vision: provider.capabilities.vision, imageBudget, reviewBudget });
         results.push({ role: "tool", tool_call_id: call.id, content: out.content });
         if (out.images) images.push(...out.images);
         changed ||= out.changed === true;
         if (call.function.name === "check") checkedSinceChange = true;
-        else if (out.changed === true) checkedSinceChange = false;
+        else if (call.function.name === "review" && out.ok) reviewedSinceChange = true;
+        else if (out.changed === true) {
+          checkedSinceChange = false;
+          reviewedSinceChange = false;
+        }
         yield { type: "tool-result", id: call.id, ok: out.ok, summary: out.summary };
       }
 
@@ -239,6 +257,8 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
       await saveHistory(projectId, messages);
     }
     await saveHistory(projectId, messages);
+    // Files the director wrote may load GSAP from the CDN: give the project its own copy.
+    if ((await localizeGsap(projectId).catch(() => [])).length > 0) yield { type: "files-changed" };
     if (!finished && !signal.aborted) {
       yield { type: "error", message: `The director stopped after ${MAX_ROUNDS} steps before finishing. Send "continue" to let it carry on.` };
     }

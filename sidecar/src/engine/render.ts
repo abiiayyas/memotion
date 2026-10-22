@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { runCli } from "./cli.js";
+import { localizeGsap } from "../projects/gsap.js";
 import { projectPath, readMeta, touch } from "../projects/store.js";
 
 export type RenderQuality = "draft" | "standard" | "high";
@@ -69,6 +70,8 @@ export async function startRender(
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const output = `renders/${meta.orientation}-${fps}fps-${stamp}.mp4`;
   const root = projectPath(projectId);
+  // A render with no internet must not depend on the CDN.
+  await localizeGsap(projectId).catch(() => []);
   await mkdir(join(root, "renders"), { recursive: true });
 
   const job: RenderJob = {

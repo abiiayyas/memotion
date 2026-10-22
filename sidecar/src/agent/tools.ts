@@ -7,6 +7,7 @@ import { checkProject, readDocs, snapshotProject, DOC_TOPICS } from "../engine/t
 import { listFiles, listMedia, projectPath, readMeta, safeJoin, touch } from "../projects/store.js";
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
+import { reviewFrames } from "./review.js";
 
 export interface ToolOutcome {
   /** Text the model sees. */
@@ -67,6 +68,7 @@ const TranscribeArgs = z.object({
   mediaPath: z.string().min(1),
   captionStyle: z.enum(["highlight", "pop", "classic", "clean"]).default("highlight"),
 });
+const ReviewArgs = z.object({ times: z.array(z.number().min(0)).max(6).optional(), focus: z.string().max(500).optional() });
 const CaptureArgs = z.object({ url: z.string().min(1).max(2000) });
 const ImageArgs = z.object({
   prompt: z.string().min(3).max(4000),
@@ -144,6 +146,21 @@ export const TOOL_SPECS: ChatCompletionTool[] = [
         type: "object",
         properties: { times: { type: "array", items: { type: "number" }, description: "1-6 timestamps in seconds" } },
         required: ["times"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "review",
+      description:
+        "Have a reviewer model that can SEE look at rendered frames and report visible problems (a scene that never shows, clipped or overlapping text, unreadable text, placeholder text). Call it after check passes. With no arguments it picks frames shortly after each scene starts. Only works when the user set up a reviewer; limited per request.",
+      parameters: {
+        type: "object",
+        properties: {
+          times: { type: "array", items: { type: "number" }, description: "Optional: up to 6 timestamps in seconds" },
+          focus: { type: "string", description: "Optional: what to look at especially" },
+        },
       },
     },
   },
@@ -237,7 +254,7 @@ export async function runTool(
   projectId: string,
   name: string,
   rawArgs: unknown,
-  ctx: { signal: AbortSignal; vision: boolean; imageBudget: { left: number } },
+  ctx: { signal: AbortSignal; vision: boolean; imageBudget: { left: number }; reviewBudget: { left: number } },
 ): Promise<ToolOutcome> {
   const root = projectPath(projectId);
   try {
@@ -378,6 +395,21 @@ export async function runTool(
         const meta = await readMeta(projectId);
         const img = await generateImage(projectId, { prompt: args.prompt, shape: args.shape ?? meta.orientation, name: args.name }, ctx.signal);
         return { ok: true, changed: true, summary: img.path, content: `Saved ${img.path} (${img.provider}, ${img.model}). Reference it as "${img.path}".` };
+      }
+      case "review": {
+        const args = ReviewArgs.parse(rawArgs);
+        if (ctx.reviewBudget.left <= 0) {
+          return { ok: false, summary: "review limit reached", content: "Review limit for this request reached. Finish with what you have and say that the rest was not reviewed." };
+        }
+        const out = await reviewFrames(projectId, args, ctx.signal);
+        if (!out.ok) return { ok: false, summary: "review unavailable", content: out.reason };
+        ctx.reviewBudget.left--;
+        const clean = /^no visible problems\.?$/i.test(out.text.trim());
+        return {
+          ok: true,
+          summary: clean ? "no visible problems" : "problems reported",
+          content: `Reviewer (looked at ${out.times.map((t) => `${t.toFixed(1)}s`).join(", ")}):\n${out.text}\n\nThe reviewer sees only these still frames and can be wrong. Fix what is real, then run check.`,
+        };
       }
       default:
         return { ok: false, summary: `unknown tool ${name}`, content: `Unknown tool: ${name}` };

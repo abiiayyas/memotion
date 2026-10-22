@@ -10,6 +10,7 @@ import { ExportPanel } from "./Export";
 import { Icon, type IconName } from "./Icons";
 import { MediaPanel } from "./Media";
 import { Preview } from "./Preview";
+import { SystemStatus } from "./SystemStatus";
 import { SourcesPanel } from "./Sources";
 import { Timeline } from "./Timeline";
 import { VariablesPanel } from "./Variables";
@@ -265,6 +266,7 @@ export function Editor(p: EditorProps) {
               <button onClick={() => setExportOpen(false)} aria-label="Close">✕</button>
             </div>
             <div className="form">
+              <SystemStatus compact />
               <ExportPanel project={project} />
             </div>
           </div>

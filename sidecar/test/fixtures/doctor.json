@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "Version",
+      "ok": true,
+      "detail": "0.8.168 (latest)"
+    },
+    {
+      "name": "FFmpeg",
+      "ok": true,
+      "detail": "ffmpeg 8.1 at /usr/local/bin/ffmpeg"
+    },
+    {
+      "name": "FFprobe",
+      "ok": true,
+      "detail": "ffprobe 8.1 at /usr/local/bin/ffprobe"
+    },
+    {
+      "name": "Chrome",
+      "ok": true,
+      "detail": "cache: $HOME/.cache/puppeteer/chrome-headless-shell/mac-153.0.8010.36/chrome-headless-shell-mac-x64/chrome-headless-shell"
+    }
+  ]
+}

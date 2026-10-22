@@ -8,6 +8,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { runAgent, loadHistory, clearHistory, isAgentRunning } from "./agent/loop.js";
 import { CLI_SPECS, detectClis } from "./agents/cli.js";
+import { localizeGsap } from "./projects/gsap.js";
 import { registerMcpRoutes } from "./agents/mcp.js";
 import { ChatContext, markCommentsSent, renderContext } from "./marks/store.js";
 import { registerPreviewProxy } from "./preview/proxy.js";
@@ -173,7 +174,11 @@ export function buildApp(opts: ServerOptions): Hono {
 
   // ── projects ───────────────────────────────────────────────
   app.get("/projects", async (c) => c.json(await listProjects()));
-  app.post("/projects", async (c) => c.json(await createProject(CreateProject.parse(await c.req.json()))));
+  app.post("/projects", async (c) => {
+    const meta = await createProject(CreateProject.parse(await c.req.json()));
+    await localizeGsap(meta.id).catch(() => []); // a new project starts able to work offline
+    return c.json(meta);
+  });
   app.get("/projects/:id", async (c) => c.json(await readMeta(c.req.param("id"))));
   app.patch("/projects/:id", async (c) => {
     const { name } = z.object({ name: z.string().trim().min(1).max(80) }).parse(await c.req.json());
