@@ -16,8 +16,8 @@ interface ConfigFile {
   reviewerProviderId: string | null;
 }
 
-export type AgentBackend = "api" | "claude" | "codex" | "opencode";
-const BACKENDS: Record<AgentBackend, true> = { api: true, claude: true, codex: true, opencode: true };
+export type AgentBackend = "api" | "claude" | "codex" | "opencode" | "agy";
+const BACKENDS: Record<AgentBackend, true> = { api: true, claude: true, codex: true, opencode: true, agy: true };
 
 export function isAgentBackend(v: string): v is AgentBackend {
   return v in BACKENDS;

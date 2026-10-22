@@ -12,6 +12,7 @@ import { selfPort } from "../config.js";
 import { getReviewerProvider } from "../providers/store.js";
 import { previewEtag, waitPreviewChanged } from "../engine/preview.js";
 import { listMedia, projectPath, readMeta } from "../projects/store.js";
+import { addAgyServer, agyServerName, claimAgy, removeAgyServer, removeStaleServers } from "./agyMcp.js";
 import { childEnv, CLI_SPECS, findOnPath, type CliId } from "./cli.js";
 import { claudeToolLabel, mayChangeFiles, parserFor } from "./events.js";
 import { openRunScope } from "./mcp.js";
@@ -90,6 +91,15 @@ export function buildInvocation(id: CliId, input: InvocationInput): Invocation {
         "-",
       ],
       stdin: prompt,
+      env: {},
+    };
+  }
+  if (id === "agy") {
+    return {
+      // Every tool is auto-approved: the only way it writes files in print mode. The user chose this in Settings.
+      // --sandbox asks it to restrict the terminal; in testing it retried a refused command and got through, so
+      // treat it as a hint, not a wall. Memotion's tools are added to its server list by the caller (agyMcp.ts).
+      args: ["--print", prompt, "--dangerously-skip-permissions", "--sandbox", "--output-format", "stream-json"],
       env: {},
     };
   }
@@ -177,14 +187,20 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
   const cleanup: (() => Promise<void>)[] = [];
   try {
     const spec = CLI_SPECS[id];
-    if (spec.unsupported) {
-      yield { type: "error", message: `${spec.label} cannot be used as the director: ${spec.unsupported}` };
-      return;
-    }
     const binary = await findOnPath(spec.binary);
     if (!binary) {
       yield { type: "error", message: `${spec.label} was not found on this computer. Install it (${spec.install}), then choose it again in Settings.` };
       return;
+    }
+
+    // Antigravity has one list of MCP servers for the whole account: one run at a time, and ours is added for the run only.
+    const agySlot = id === "agy" ? claimAgy() : null;
+    if (id === "agy") {
+      if (!agySlot) {
+        yield { type: "error", message: "Antigravity is already working on another project. It can only do one at a time." };
+        return;
+      }
+      cleanup.push(async () => agySlot());
     }
 
     const meta = await readMeta(projectId);
@@ -196,7 +212,14 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
     const isolatedConfigDir = await mkdtemp(join(tmpdir(), "memotion-cfg-"));
     cleanup.push(() => rm(isolatedConfigDir, { recursive: true, force: true }));
     const prompt = withRecentConversation(await loadHistory(projectId), userText);
-    const inv = buildInvocation(id, { isolatedConfigDir, mcpUrl: `http://127.0.0.1:${selfPort()}${scope.path}`, system, prompt, cwd });
+    const mcpUrl = `http://127.0.0.1:${selfPort()}${scope.path}`;
+    if (id === "agy") {
+      const name = agyServerName(scope.token);
+      await removeStaleServers(binary);
+      await addAgyServer(binary, name, mcpUrl);
+      cleanup.push(() => removeAgyServer(binary, name));
+    }
+    const inv = buildInvocation(id, { isolatedConfigDir, mcpUrl, system, prompt, cwd });
 
     const child = spawn(binary, inv.args, { cwd, env: await childEnv(inv.env), stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32" });
     if (child.pid !== undefined) active[child.pid] = child;
@@ -233,7 +256,7 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
           finalText += (finalText ? "\n\n" : "") + ev.text;
           yield { type: "text", text: ev.text };
         } else if (ev.type === "tool-start") {
-          const label = id === "claude" ? claudeToolLabel(ev.name, ev.args) : ev.name;
+          const label = id === "claude" || id === "agy" ? claudeToolLabel(ev.name, ev.args) : ev.name;
           names[ev.id] = ev.name;
           yield { type: "tool-start", id: ev.id, name: label, args: ev.args };
         } else if (ev.type === "tool-result") {

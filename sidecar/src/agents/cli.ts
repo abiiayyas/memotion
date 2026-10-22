@@ -11,8 +11,8 @@ interface CliSpec {
   label: string;
   vendor: string;
   binary: string;
-  /** Why it cannot be used as the director, when it cannot. */
-  unsupported?: string;
+  /** Set when using it means giving up a safeguard: what the user gives up. Choosing it needs an explicit yes. */
+  risk?: string;
   install: string;
   signIn: string;
 }
@@ -43,9 +43,10 @@ export const CLI_SPECS: Record<CliId, CliSpec> = {
     label: "Antigravity",
     vendor: "Google",
     binary: "agy",
-    // Measured: in print mode every file write was denied unless all permission prompts are switched off
-    // (--dangerously-skip-permissions), which Memotion will not do on the user's behalf.
-    unsupported: "In non-interactive mode it cannot write files unless every permission prompt is disabled, which Memotion does not do.",
+    // Measured: in print mode every file write is denied unless all permission prompts are switched off, and its
+    // allow-rules are read only from the user's own settings file, not from the project. So it runs with
+    // --dangerously-skip-permissions, and only because the user chose that for this tool.
+    risk: "It cannot write files without turning off all of its permission prompts, so Memotion runs it with every tool auto-approved: it can run shell commands and use your other MCP servers on this computer without asking.",
     install: "See the Antigravity documentation",
     signIn: "agy",
   },
@@ -66,8 +67,8 @@ export interface CliInfo {
   version?: string;
   /** True: signed in. False: found but not signed in. null: not checked for this tool. */
   signedIn: boolean | null;
-  /** Present when Memotion cannot use it as the director, with the reason. */
-  unsupported?: string;
+  /** Present when choosing it gives up a safeguard. See `CliSpec.risk`. */
+  risk?: string;
   install: string;
   signInCommand: string;
 }
@@ -90,7 +91,7 @@ function commonDirs(): string[] {
   ];
 }
 
-function run(cmd: string, args: string[], env: NodeJS.ProcessEnv, timeout: number): Promise<{ ok: boolean; out: string }> {
+export function run(cmd: string, args: string[], env: NodeJS.ProcessEnv, timeout: number): Promise<{ ok: boolean; out: string }> {
   const { promise, resolve } = Promise.withResolvers<{ ok: boolean; out: string }>();
   execFile(cmd, args, { env, timeout, maxBuffer: 1_000_000 }, (err, stdout, stderr) => {
     resolve({ ok: !err, out: `${stdout}${stderr}`.trim() });
@@ -193,7 +194,7 @@ async function detectOne(id: CliId, env: NodeJS.ProcessEnv): Promise<CliInfo> {
     vendor: spec.vendor,
     found: false,
     signedIn: null,
-    unsupported: spec.unsupported,
+    risk: spec.risk,
     install: spec.install,
     signInCommand: spec.signIn,
   };

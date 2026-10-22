@@ -35,11 +35,11 @@ const ClaudeAssistant = z.looseObject({ type: z.literal("assistant"), message: z
 const ClaudeUser = z.looseObject({ type: z.literal("user"), message: z.looseObject({ content: z.union([z.string(), z.array(z.unknown())]) }) });
 const ClaudeResult = z.looseObject({ type: z.literal("result"), is_error: z.boolean().optional(), result: z.string().optional() });
 
-const FilePathInput = z.looseObject({ file_path: z.string().optional(), path: z.string().optional(), pattern: z.string().optional() });
+const FilePathInput = z.looseObject({ file_path: z.string().optional(), path: z.string().optional(), Path: z.string().optional(), pattern: z.string().optional() });
 
 function claudeChip(name: string, input: unknown): string {
   const parsed = FilePathInput.safeParse(input);
-  const target = parsed.success ? (parsed.data.file_path ?? parsed.data.path ?? parsed.data.pattern) : undefined;
+  const target = parsed.success ? (parsed.data.file_path ?? parsed.data.path ?? parsed.data.Path ?? parsed.data.pattern) : undefined;
   return target ? `${name} ${leaf(target)}` : name;
 }
 
@@ -197,9 +197,67 @@ export function parseOpenCodeLine(line: string): CliEvent[] {
   return [];
 }
 
+// ── Antigravity: --print --output-format stream-json ─────────────────────────────────────
+
+const AgyStep = z.looseObject({
+  conversation_id: z.string().optional(),
+  step_index: z.number(),
+  state: z.string(),
+  step_type: z.string(),
+  text_delta: z.string().optional(),
+  tool_name: z.string().optional(),
+  tool_info: z.looseObject({ parameters: z.unknown().optional(), output: z.string().optional() }).optional(),
+});
+const AgyMcpCall = z.looseObject({ ServerName: z.string(), ToolName: z.string(), Arguments: z.unknown().optional() });
+const AgyLine = z.looseObject({
+  event: z.string(),
+  step_update: AgyStep.optional(),
+  result: z.looseObject({ status: z.string().optional(), response: z.string().optional(), error: z.string().optional() }).optional(),
+  error: z.union([z.string(), z.looseObject({ message: z.string().optional() })]).optional(),
+});
+
+/**
+ * Its reply arrives as small pieces of text while a step is active; one reply is the pieces of one step, so they are
+ * gathered and sent when the step is done. Each run needs its own parser because of that.
+ */
+export function agyParser(): (line: string) => CliEvent[] {
+  const pending: Record<number, string> = {};
+  return (line) => {
+    const parsed = AgyLine.safeParse(parseJson(line));
+    if (!parsed.success) return [];
+    const { event, step_update: step, result, error } = parsed.data;
+    if (event === "error") return [{ type: "failure", message: typeof error === "string" ? error : (error?.message ?? "Antigravity reported an error.") }];
+    if (event === "result") {
+      const status = result?.status ?? "";
+      return status === "" || status === "SUCCESS" ? [] : [{ type: "failure", message: result?.error ?? `Antigravity finished with status ${status}.` }];
+    }
+    if (!step) return [];
+    const id = `${step.conversation_id ?? "agy"}:${step.step_index}`;
+    if (step.step_type === "agent_response") {
+      pending[step.step_index] = (pending[step.step_index] ?? "") + (step.text_delta ?? "");
+      if (step.state !== "DONE") return [];
+      const text = (pending[step.step_index] ?? "").trim();
+      delete pending[step.step_index];
+      return text.length > 0 ? [{ type: "text", text }] : [];
+    }
+    if (step.step_type !== "tool" || !step.tool_name) return [];
+    if (step.state === "ACTIVE") {
+      // MCP tools all arrive as one generic call that names the server and the tool. Shown like Claude Code's: mcp__memotion__check.
+      const mcp = step.tool_name === "call_mcp_tool" ? AgyMcpCall.safeParse(step.tool_info?.parameters) : null;
+      if (mcp?.success) return [{ type: "tool-start", id, name: `mcp__memotion__${mcp.data.ToolName}`, args: mcp.data.Arguments }];
+      return [{ type: "tool-start", id, name: step.tool_name, args: step.tool_info?.parameters }];
+    }
+    const output = step.tool_info?.output ?? "";
+    // A shell command reports its exit code in the text; any other tool is fine unless the step did not finish.
+    const failed = step.state !== "DONE" || /exited with code [1-9]/.test(output);
+    return [{ type: "tool-result", id, ok: !failed, summary: clip(output.replace(/\s+/g, " ").trim(), 120) }];
+  };
+}
+
 export function parserFor(id: CliId): (line: string) => CliEvent[] {
   if (id === "claude") return parseClaudeLine;
   if (id === "codex") return parseCodexLine;
+  if (id === "agy") return agyParser();
   return parseOpenCodeLine;
 }
 
@@ -215,6 +273,9 @@ const WRITERS: Record<string, true> = {
   write: true,
   patch: true,
   bash: true,
+  write_file: true,
+  edit_file: true,
+  run_command: true,
 };
 
 export function mayChangeFiles(name: string): boolean {

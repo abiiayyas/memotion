@@ -21,7 +21,7 @@ const CLI_NOTES = `
 
 # You are running as a coding agent inside the project folder
 - Your working directory is the project. Read and write files with your own file tools; the tool names above (list_files, read_file, write_file, edit_file) are not available to you. Never touch anything outside this folder.
-- Memotion's tools come from the MCP server named "memotion": check, snapshot, review (when the user set up a reviewer), read_docs, list_media, generate_voiceover, transcribe_and_caption, capture_website, generate_image. Use check after every substantial change and fix its errors; this is how you verify the video. Do not look for a hyperframes command to run.
+- Memotion's tools come from the MCP server whose name starts with "memotion": check, snapshot, review (when the user set up a reviewer), read_docs, list_media, generate_voiceover, transcribe_and_caption, capture_website, generate_image. Use check after every substantial change and fix its errors; this is how you verify the video. Do not look for a hyperframes command to run.
 - Do not start servers and do not render; the app renders when the user presses Export.
 - Finish with the short summary described above.`;
 

@@ -55,7 +55,7 @@ describe("how each CLI is started", () => {
     const env = await childEnv();
     expect(Object.keys(env).filter((k) => k.startsWith("MEMOTION_"))).toEqual([]);
     expect(env.PATH).toBeTruthy();
-  });
+  }, 30_000); // reads PATH from the login shell, whose start-up files can take seconds under load
 });
 
 describe("conversation carried into a fresh CLI run", () => {
@@ -207,7 +207,7 @@ describe("running a CLI agent (a stub `claude` replays a real captured stream)",
     expect(Date.now() - started).toBeLessThan(10_000);
   }, 20_000);
 
-  it("refuses a second run on the same project, and an agent that cannot work", async () => {
+  it("refuses a second run on the same project", async () => {
     const release = claimProject(projectId);
     expect(release).not.toBeNull();
     const busy: AgentEvent[] = [];
@@ -215,9 +215,6 @@ describe("running a CLI agent (a stub `claude` replays a real captured stream)",
     expect(busy[0]).toMatchObject({ type: "error", message: expect.stringMatching(/already working/) });
     release?.();
 
-    const unsupported: AgentEvent[] = [];
-    for await (const ev of runCliAgent(projectId, "x", new AbortController().signal, "agy")) unsupported.push(ev);
-    expect(unsupported[0]).toMatchObject({ type: "error", message: expect.stringMatching(/Antigravity cannot be used/) });
     expect(existsSync(join(out, "never"))).toBe(false);
   });
 });

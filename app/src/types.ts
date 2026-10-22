@@ -303,7 +303,7 @@ export interface AboutInfo {
   gsapCached: boolean;
 }
 
-export type AgentBackend = "api" | "claude" | "codex" | "opencode";
+export type AgentBackend = "api" | "claude" | "codex" | "opencode" | "agy";
 
 export interface CliInfo {
   id: "claude" | "codex" | "opencode" | "agy";
@@ -313,7 +313,8 @@ export interface CliInfo {
   path?: string;
   version?: string;
   signedIn: boolean | null;
-  unsupported?: string;
+  /** Set when choosing it gives up a safeguard; the user must confirm. */
+  risk?: string;
   install: string;
   signInCommand: string;
 }

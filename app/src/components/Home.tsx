@@ -293,7 +293,8 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
           <div className="prompt-send">
             <ChipSelect icon="agent" label="Who writes the video" active={backend !== "api"} value={backend} onChange={(v) => void changeBackend(v)} disabled={busy || agents === null} title="Who writes the video">
               <option value="api">{providerName}</option>
-              {agents?.clis.filter((c) => c.id !== "agy" && c.found && !c.unsupported).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              {/* A tool that needs a safeguard turned off is chosen in Settings, where that is explained; here it only shows when already chosen. */}
+              {agents?.clis.filter((c) => c.found && (!c.risk || c.id === backend)).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
             </ChipSelect>
             <button type="submit" className="send-round" disabled={!canSend} aria-label="Start the video">
               <Icon name="arrow-up" size={18} />
