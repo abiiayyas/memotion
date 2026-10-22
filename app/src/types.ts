@@ -263,6 +263,46 @@ export interface AppSettings {
   reviewerChoices: { id: string; name: string; model: string; hasKey: boolean }[];
 }
 
+/** Choices kept by the sidecar (preferences.json). Mirrors sidecar/src/preferences.ts. */
+export interface Preferences {
+  replyLanguage: "auto" | "id" | "en";
+  maxSteps: number;
+  maxReviews: number;
+  maxImages: number;
+  newVideoOrientation: "landscape" | "portrait";
+  newVideoFps: 30 | 60;
+  exportQuality: Quality;
+  exportFps: "project" | "30" | "60";
+  whisperModel: "auto" | "base" | "small" | "medium";
+  voiceVendor: "edge" | "local" | "openai" | "elevenlabs";
+  voiceId: string;
+  voiceRate: number;
+  captionsOn: boolean;
+  captionStyle: CaptionStyle;
+  captionPosition: "bottom" | "center" | "top";
+}
+
+export interface StorageItem {
+  id: string;
+  label: string;
+  note: string;
+  bytes: number;
+}
+
+export interface StorageInfo {
+  dataDir: string;
+  items: StorageItem[];
+  projectsBytes: number;
+  rendersBytes: number;
+}
+
+export interface AboutInfo {
+  dataDir: string;
+  hyperframes: string;
+  gsap: string;
+  gsapCached: boolean;
+}
+
 export type AgentBackend = "api" | "claude" | "codex" | "opencode";
 
 export interface CliInfo {

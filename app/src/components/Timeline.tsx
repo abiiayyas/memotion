@@ -4,6 +4,7 @@ import type { Player } from "../player";
 import { buildLanes, clampDelta, groupMoveEdits, laneTarget, marqueeHits, round3, sameLaneFamily, zoomAround, type Rect } from "../timelineMath";
 import type { BatchEdit, EditOp, Project, TimelineClip, TimelineView } from "../types";
 import { fmtTime } from "./Preview";
+import { usePrefs } from "../prefs";
 
 const LABEL_W = 108;
 const LANE_H = 34;
@@ -60,6 +61,7 @@ export function Timeline({
   /** Queue a message for the director (used after a split, whose copy has no animation). */
   onAsk?: (text: string) => void;
 }) {
+  const { skip } = usePrefs();
   const [view, setView] = useState<TimelineView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -265,9 +267,12 @@ export function Timeline({
     else if (e.key === " ") {
       e.preventDefault();
       player.toggle();
-    } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && selected.length > 0) {
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
       e.preventDefault();
-      void shiftClips(selected, (e.shiftKey ? 1 : frame) * (e.key === "ArrowLeft" ? -1 : 1));
+      const dir = e.key === "ArrowLeft" ? -1 : 1;
+      // With clips selected the arrows nudge them; with none they move the playhead (Shift: by the skip distance).
+      if (selected.length > 0) void shiftClips(selected, (e.shiftKey ? 1 : frame) * dir);
+      else player.seek(Math.max(0, Math.min(view?.duration ?? 0, player.time + (e.shiftKey ? skip : frame) * dir)));
     }
   }
 

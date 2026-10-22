@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import pkg from "./package.json" with { type: "json" };
 
 // Tauri expects a fixed dev port; the sidecar's CORS allow-list names it.
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: { port: 1420, strictPort: true, host: "127.0.0.1" },
   build: { target: "safari15", sourcemap: false },
 });

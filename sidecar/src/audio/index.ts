@@ -11,7 +11,8 @@ import { DEFAULT_LOCAL_VOICE, LOCAL_VOICES, localVoiceOptions, splitWords, synth
 import { findWhisperBinary, whisperModelPath } from "./whisperSetup.js";
 import { listElevenLabsVoices, synthesizeElevenLabs } from "./elevenlabs.js";
 import { OPENAI_VOICES, synthesizeOpenAi } from "./openai.js";
-import { transcribeFile, type TranscribeOptions } from "./transcribe.js";
+import { getPreferences } from "../preferences.js";
+import { preferredModel, transcribeFile, type TranscribeOptions } from "./transcribe.js";
 import type { CaptionRequest, TtsRequest, VoiceOption, WordTiming } from "./types.js";
 
 export * from "./types.js";
@@ -131,7 +132,8 @@ export async function transcribeAndCaption(
 ): Promise<{ captionsFile: string; duration: number; words: WordTiming[] }> {
   // The path comes from the UI or the model: it must stay inside the project.
   const absPath = safeJoin(projectPath(projectId), mediaRelPath);
-  const { words } = await transcribeFile(absPath, transcribeOpts);
+  const model = transcribeOpts.model ?? preferredModel(getPreferences().whisperModel, transcribeOpts.language);
+  const { words } = await transcribeFile(absPath, { ...transcribeOpts, model });
   const capRes = await applyCaptionsToProject(projectId, words, captionOpts);
   return { captionsFile: capRes.captionsFile, duration: capRes.duration, words };
 }

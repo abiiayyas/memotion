@@ -3,7 +3,7 @@ import { api } from "../api";
 import type { AppSettings } from "../types";
 
 /** A second model that can SEE, used by directors that cannot. It looks at rendered frames and reports what is wrong. */
-export function ReviewerPicker({ refreshKey }: { refreshKey: string }) {
+export function ReviewerPicker({ refreshKey, maxReviews }: { refreshKey: string; maxReviews: number }) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +46,7 @@ export function ReviewerPicker({ refreshKey }: { refreshKey: string }) {
       {error && <div className="notice error">{error}</div>}
       <p className="hint">
         <code>check</code> cannot see: it once passed a video whose second and third scenes never appeared. With a reviewer, a director that cannot view images (most cheap models) sends frames to it after <code>check</code> and gets back a list of visible problems.
-        A director that can see already looks at its own snapshots and does not use it. Each review sends up to six frames to that provider, at most three times per request, and costs what a vision model costs.
+        A director that can see already looks at its own snapshots and does not use it. Each review sends up to six frames to that provider, at most {maxReviews} time{maxReviews === 1 ? "" : "s"} per request (change it under Limits), and costs what a vision model costs.
         Choose a provider that has <em>Can see images</em> turned on below.
       </p>
     </section>

@@ -4,7 +4,6 @@ import { DIMENSIONS, readMeta } from "../projects/store.js";
 import { makeClient } from "../providers/client.js";
 import { getReviewerProvider } from "../providers/store.js";
 
-export const MAX_REVIEWS_PER_TURN = 3;
 const MAX_FRAMES = 6;
 const MAX_REPLY_CHARS = 4000;
 

@@ -4,7 +4,8 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MAX_REVIEWS_PER_TURN, pickTimes, REVIEWER_SYSTEM } from "../src/agent/review.js";
+import { DEFAULT_PREFERENCES } from "../src/preferences.js";
+import { pickTimes, REVIEWER_SYSTEM } from "../src/agent/review.js";
 import { runTool } from "../src/agent/tools.js";
 import { hyperframesBin } from "../src/config.js";
 import { createProject } from "../src/projects/store.js";
@@ -78,7 +79,7 @@ describe.skipIf(!hasChrome())("the review tool, with frames from the real render
   const seen: { messages: { role: string; content: unknown }[]; model: string }[] = [];
   let reply = "No visible problems.";
   let projectId = "";
-  const ctx = (budget = MAX_REVIEWS_PER_TURN) => ({ signal: new AbortController().signal, vision: false, imageBudget: { left: 0 }, reviewBudget: { left: budget } });
+  const ctx = (budget = DEFAULT_PREFERENCES.maxReviews) => ({ signal: new AbortController().signal, vision: false, imageBudget: { left: 0 }, reviewBudget: { left: budget } });
 
   beforeAll(async () => {
     server = createServer((req, res) => {

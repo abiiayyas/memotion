@@ -4,6 +4,7 @@ import { usePicker, type MarkState } from "../marks";
 import type { Player } from "../player";
 import { MarkLayer, MarkToolbar, useDraw } from "./PreviewTools";
 import type { Project } from "../types";
+import { usePrefs } from "../prefs";
 
 const DIMS = {
   landscape: { w: 1920, h: 1080 },
@@ -24,6 +25,7 @@ export function Preview({ project, reloadKey, player, marks }: { project: Projec
   const dims = DIMS[project.orientation];
   const picker = usePicker(player.frameRef, `${url}#${reloadKey}`);
   const draw = useDraw(project, player, picker, dims, marks);
+  const { skip } = usePrefs();
 
   useEffect(() => {
     setUrl(null);
@@ -66,8 +68,14 @@ export function Preview({ project, reloadKey, player, marks }: { project: Projec
         <MarkToolbar marks={marks} draw={draw} disabled={!url || !picker.ready} />
       </div>
       <div className="transport">
+        <button className="skip" onClick={() => player.seek(Math.max(0, player.time - skip))} disabled={!url} aria-label={`Back ${skip} seconds`} title={`Back ${skip} s`}>
+          −{skip}s
+        </button>
         <button onClick={player.toggle} disabled={!url} aria-label={player.playing ? "Pause" : "Play"}>
           {player.playing ? "❚❚" : "▶"}
+        </button>
+        <button className="skip" onClick={() => player.seek(Math.min(player.duration, player.time + skip))} disabled={!url} aria-label={`Forward ${skip} seconds`} title={`Forward ${skip} s`}>
+          +{skip}s
         </button>
         <input
           type="range"

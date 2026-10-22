@@ -84,6 +84,8 @@ export class LocalTtsNotInstalled extends Error {
 const root = (): string => join(dataDir(), "local-tts");
 const engineDir = (): string => join(root(), "engine");
 const voiceDir = (id: string): string => join(root(), "voices", id);
+export const localVoiceDir = voiceDir;
+export const localEngineDir = engineDir;
 
 export function enginePackage(platform: string = process.platform, arch: string = process.arch): string | null {
   return ENGINE_PACKAGE[`${platform}-${arch}`] ?? null;

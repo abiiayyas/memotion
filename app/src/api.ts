@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AboutInfo,
   CaptionRequest,
+  Preferences,
+  StorageInfo,
   TtsRequest,
   AgentBackend,
   AgentsInfo,
@@ -226,6 +229,13 @@ export const api = {
 
   capture: (projectId: string, url: string) => request<CaptureResult>("POST", `/projects/${projectId}/capture`, { url }),
   settings: () => request<AppSettings>("GET", "/settings"),
+  preferences: () => request<Preferences>("GET", "/preferences"),
+  setPreferences: (patch: Partial<Preferences>) => request<Preferences>("PUT", "/preferences", patch),
+  resetPreferences: () => request<Preferences>("POST", "/preferences/reset"),
+  storage: () => request<StorageInfo>("GET", "/storage"),
+  removeStorage: (id: string) => request<StorageInfo>("POST", "/storage/remove", { id }),
+  about: () => request<AboutInfo>("GET", "/about"),
+  downloadGsap: () => request<AboutInfo>("POST", "/about/gsap"),
   system: () => request<{ checks: SystemCheck[] }>("GET", "/system"),
   downloadChrome: () => request<{ checks: SystemCheck[] }>("POST", "/system/chrome"),
   setReviewer: (providerId: string | null) => request<AppSettings>("PUT", "/settings/reviewer", { providerId }),

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api";
+import { usePrefs } from "../prefs";
 import type { CaptionRequest, CaptionStyle, LocalTtsStatus, Media, Project, TtsRequest, VoiceOption } from "../types";
 
 type Vendor = "edge" | "local" | "openai" | "elevenlabs";
@@ -39,6 +40,19 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
   const [accentColor, setAccentColor] = useState("#ff9d6b");
   const [primaryColor, setPrimaryColor] = useState("#ffffff");
   const [wordsPerGroup, setWordsPerGroup] = useState(3);
+
+  // The defaults from Settings: used as the starting point and again when they change there.
+  const { prefs } = usePrefs();
+  const d = prefs;
+  useEffect(() => {
+    if (!d) return;
+    setVendor(d.voiceVendor);
+    setVoice(d.voiceId);
+    setRate(d.voiceRate);
+    setWithCaptions(d.captionsOn);
+    setStyle(d.captionStyle);
+    setPosition(d.captionPosition);
+  }, [d?.voiceVendor, d?.voiceId, d?.voiceRate, d?.captionsOn, d?.captionStyle, d?.captionPosition]);
 
   const [selectedMedia, setSelectedMedia] = useState("");
   const [keyDraft, setKeyDraft] = useState("");

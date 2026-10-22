@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { getPreferences } from "../preferences.js";
 import { buildBrief } from "../agent/brief.js";
 import { localizeGsap } from "../projects/gsap.js";
 import { claimProject, loadHistory, recordTurn, type AgentEvent } from "../agent/loop.js";
@@ -189,7 +190,7 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
     const meta = await readMeta(projectId);
     const media = (await listMedia(projectId)).map((m) => `${m.path} (${m.kind})`);
     const brief = await buildBrief(meta);
-    brief.reviewer = getReviewerProvider() !== undefined;
+    brief.reviewer = getReviewerProvider() !== undefined && getPreferences().maxReviews > 0;
     const system = systemPrompt(meta, media, brief, true);
     const cwd = projectPath(projectId);
     const isolatedConfigDir = await mkdtemp(join(tmpdir(), "memotion-cfg-"));

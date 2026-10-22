@@ -1,24 +1,32 @@
 import { useEffect, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, rawUrl, renderProgress } from "../api";
+import { usePrefs } from "../prefs";
 import type { Project, Quality, RenderJob } from "../types";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 
 export function ExportPanel({ project }: { project: Project }) {
+  const { prefs } = usePrefs();
   const [quality, setQuality] = useState<Quality>("standard");
   const [fps, setFps] = useState<30 | 60>(project.fps);
+  const defaultQuality = prefs?.exportQuality;
+  const defaultFps = prefs?.exportFps;
   const [job, setJob] = useState<RenderJob | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    setFps(project.fps);
+    if (defaultQuality) setQuality(defaultQuality);
+  }, [defaultQuality]);
+
+  useEffect(() => {
+    setFps(defaultFps === "30" ? 30 : defaultFps === "60" ? 60 : project.fps);
     setJob(null);
     setVideoUrl(null);
     setError(null);
-  }, [project.id, project.fps]);
+  }, [project.id, project.fps, defaultFps]);
 
   async function start() {
     setError(null);

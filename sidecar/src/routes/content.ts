@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -21,8 +22,11 @@ import { getFormat, listFormats } from "../formats/store.js";
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
 import { analyzeRemotionProject, importHyperframesProject, importRemotionProject } from "../projects/import.js";
+import { HYPERFRAMES_VERSION, dataDir } from "../config.js";
 import { checkSystem, downloadChrome } from "../engine/system.js";
-import { localizeGsap } from "../projects/gsap.js";
+import { ensureGsapCache, GSAP_VERSION, gsapCacheFile, localizeGsap } from "../projects/gsap.js";
+import { getPreferences, PreferencesPatch, resetPreferences, updatePreferences } from "../preferences.js";
+import { listStorage, removeStorage } from "../storage.js";
 import { projectPath, updateMeta } from "../projects/store.js";
 import { getReviewerProviderId, listProviders, getReviewerProvider, isImageGenerationEnabled, setImageGenerationEnabled, setReviewerProviderId } from "../providers/store.js";
 import { createFromTemplate, deleteTemplate, listTemplates, saveAsTemplate, templateVariables, thumbPath } from "../templates/store.js";
@@ -169,6 +173,23 @@ export function registerContentRoutes(app: Hono): void {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
     return c.json({ checks: await checkSystem() });
+  });
+  // Choices from Settings that are not providers or keys.
+  app.get("/preferences", (c) => c.json(getPreferences()));
+  app.put("/preferences", async (c) => c.json(updatePreferences(PreferencesPatch.parse(await c.req.json()))));
+  app.post("/preferences/reset", (c) => c.json(resetPreferences()));
+  // What Memotion keeps on disk besides projects, and removing one item of it.
+  app.get("/storage", async (c) => c.json({ dataDir: dataDir(), ...(await listStorage()) }));
+  app.post("/storage/remove", async (c) => {
+    const { id } = z.object({ id: z.string().min(1).max(100) }).parse(await c.req.json());
+    if (!(await removeStorage(id))) return c.json({ error: "Nothing to remove with that name." }, 404);
+    return c.json({ dataDir: dataDir(), ...(await listStorage()) });
+  });
+  const aboutView = () => ({ dataDir: dataDir(), hyperframes: HYPERFRAMES_VERSION, gsap: GSAP_VERSION, gsapCached: existsSync(gsapCacheFile()) });
+  app.get("/about", (c) => c.json(aboutView()));
+  app.post("/about/gsap", async (c) => {
+    if ((await ensureGsapCache(c.req.raw.signal)) === null) return c.json({ error: "Could not download GSAP. Check the internet connection and try again." }, 502);
+    return c.json(aboutView());
   });
   app.get("/settings", (c) => c.json({ imageGeneration: isImageGenerationEnabled(), imageBlocker: imageGenerationBlocker(), ...reviewerView() }));
   app.put("/settings/reviewer", async (c) => {

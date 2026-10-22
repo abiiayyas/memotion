@@ -100,6 +100,12 @@ export function localModel(language: string | undefined, chosen: string | undefi
   return language === "en" ? "small.en" : "small";
 }
 
+/** The model the user picked in Settings, as a whisper model name. "auto" leaves the choice to `localModel`. */
+export function preferredModel(pick: "auto" | "base" | "small" | "medium", language: string | undefined): WhisperModel | undefined {
+  if (pick === "auto") return undefined;
+  return language === "en" ? `${pick}.en` : pick;
+}
+
 /** At least one letter or digit in at least one word. A run of punctuation (",,") is whisper failing, not speech. */
 export function hasSpeech(words: WordTiming[]): boolean {
   return words.some((w) => /[\p{L}\p{N}]/u.test(w.text));

@@ -10,6 +10,10 @@ const CACHE_DIR = join(homedir(), ".cache", "hyperframes", "whisper");
 const SOURCE_DIR = join(CACHE_DIR, "whisper.cpp");
 const REPO = "https://github.com/ggml-org/whisper.cpp.git";
 
+export const whisperModelsDir = (): string => join(CACHE_DIR, "models");
+/** The whisper.cpp checkout and build Memotion made, when it had to. */
+export const whisperBuildDir = (): string => SOURCE_DIR;
+
 /** Where the CLI keeps a downloaded model. Checking this lets callers use whisper without triggering a download. */
 export function whisperModelPath(model: string): string {
   return join(CACHE_DIR, "models", `ggml-${model}.bin`);

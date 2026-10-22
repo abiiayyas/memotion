@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { usePrefs } from "../prefs";
 import { api } from "../api";
 import { ago, avatarHue, nameFromPrompt } from "../projectName";
 import type { AgentBackend, AgentsInfo, BrandKit, FileVariables, Format, Orientation, Project, TemplateInfo, VariableFill, VariableValue } from "../types";
@@ -39,6 +40,14 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
   const [text, setText] = useState("");
   const [orientation, setOrientation] = useState<Orientation>("landscape");
   const [fps, setFps] = useState<30 | 60>(30);
+  // The defaults from Settings, once they have arrived and whenever they change. A template or format still decides after that.
+  const { prefs } = usePrefs();
+  const defaultShape = prefs?.newVideoOrientation;
+  const defaultFps = prefs?.newVideoFps;
+  useEffect(() => {
+    if (defaultShape) setOrientation(defaultShape);
+    if (defaultFps) setFps(defaultFps);
+  }, [defaultShape, defaultFps]);
   const [formatId, setFormatId] = useState("");
   const [kitId, setKitId] = useState("");
   const [templateId, setTemplateId] = useState("");

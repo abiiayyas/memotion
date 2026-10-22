@@ -1,5 +1,6 @@
 import { brandBrief, getBrandKit } from "../brand/store.js";
 import { getFormat } from "../formats/store.js";
+import { getPreferences } from "../preferences.js";
 import type { ProjectMeta } from "../projects/store.js";
 import type { Brief } from "./prompt.js";
 
@@ -13,5 +14,6 @@ export async function buildBrief(meta: ProjectMeta): Promise<Brief> {
       })
     : undefined;
   const format = meta.formatId ? await getFormat(meta.formatId) : null;
-  return { brand, format };
+  const language = getPreferences().replyLanguage;
+  return { brand, format, replyLanguage: language === "auto" ? undefined : language };
 }

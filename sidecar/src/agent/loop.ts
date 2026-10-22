@@ -9,7 +9,7 @@ import { makeClient } from "../providers/client.js";
 import { localizeGsap } from "../projects/gsap.js";
 import { buildBrief } from "./brief.js";
 import { getActiveProvider, getReviewerProvider } from "../providers/store.js";
-import { MAX_REVIEWS_PER_TURN } from "./review.js";
+import { getPreferences } from "../preferences.js";
 import { previewEtag, waitPreviewChanged } from "../engine/preview.js";
 import { listMedia, projectPath, readMeta } from "../projects/store.js";
 import { systemPrompt } from "./prompt.js";
@@ -24,14 +24,12 @@ export type AgentEvent =
   | { type: "error"; message: string };
 
 /** Tool rounds one user message may take. A real video (docs, scenes, fixes) used all of 30 in a measured DeepSeek run. */
-const MAX_ROUNDS = 60;
 /** Sent once, only for the next request and never stored, when the model wants to finish without having checked its work. */
 export const REVIEW_REMINDER =
   "Automatic reminder: you changed files since the last review. Call `review` now (the reviewer can see the frames, `check` cannot), fix what it reports that is real, then finish with your summary.";
 export const CHECK_REMINDER =
   "Automatic reminder: you changed files but did not run `check` afterwards. Run `check` now, fix every error it reports, then finish with your summary.";
 /** Paid images one user message may trigger. A confused or manipulated model must not be able to run up a bill. */
-export const MAX_IMAGES_PER_TURN = 4;
 /** Tool output from earlier turns is cut to this when re-sent, to keep long sessions inside the context window. */
 const OLD_TOOL_CHARS = 2_000;
 const IMAGES_OMITTED = "[snapshot images omitted from history]";
@@ -124,8 +122,9 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     const meta = await readMeta(projectId);
     const messages = await loadHistory(projectId);
     const turnStart = messages.length;
-    const imageBudget = { left: MAX_IMAGES_PER_TURN };
-    const reviewBudget = { left: MAX_REVIEWS_PER_TURN };
+    const limits = getPreferences();
+    const imageBudget = { left: limits.maxImages };
+    const reviewBudget = { left: limits.maxReviews };
     messages.push({ role: "user", content: userText });
     // An annotated frame from the user goes to a model that can see it, as a second message so the text stays in history.
     if (attached.length > 0 && provider.capabilities.vision) {
@@ -145,13 +144,13 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     let reminded = false;
     let reviewReminded = false;
     let finished = false;
-    for (let round = 0; round < MAX_ROUNDS; round++) {
+    for (let round = 0; round < limits.maxSteps; round++) {
       if (signal.aborted) break;
       const media = (await listMedia(projectId)).map((m) => `${m.path} (${m.kind})`);
       // Re-read the project each round: the user may switch brand kit or format between turns.
       const brief = await buildBrief(await readMeta(projectId));
       // A director that can see already gets the snapshots; a reviewer is for one that cannot.
-      brief.reviewer = getReviewerProvider() !== undefined && !provider.capabilities.vision;
+      brief.reviewer = getReviewerProvider() !== undefined && !provider.capabilities.vision && limits.maxReviews > 0;
       const stream = await client.chat.completions.create(
         {
           model: provider.model,
@@ -260,7 +259,7 @@ export async function* runAgent(projectId: string, userText: string, signal: Abo
     // Files the director wrote may load GSAP from the CDN: give the project its own copy.
     if ((await localizeGsap(projectId).catch(() => [])).length > 0) yield { type: "files-changed" };
     if (!finished && !signal.aborted) {
-      yield { type: "error", message: `The director stopped after ${MAX_ROUNDS} steps before finishing. Send "continue" to let it carry on.` };
+      yield { type: "error", message: `The director stopped after ${limits.maxSteps} steps before finishing. Send "continue" to let it carry on.` };
     }
     yield { type: "done" };
   } catch (err) {

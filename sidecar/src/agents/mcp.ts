@@ -1,8 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Hono } from "hono";
 import { z } from "zod";
-import { MAX_IMAGES_PER_TURN } from "../agent/loop.js";
-import { MAX_REVIEWS_PER_TURN } from "../agent/review.js";
+import { getPreferences } from "../preferences.js";
 import { runTool, TOOL_SPECS } from "../agent/tools.js";
 import { projectPath } from "../projects/store.js";
 import { existsSync } from "node:fs";
@@ -42,7 +41,7 @@ export interface OpenScope {
 /** A capability for one agent run: the token in the URL is the only credential, and it dies with the run. */
 export function openRunScope(projectId: string, signal: AbortSignal): OpenScope {
   const token = randomBytes(24).toString("hex");
-  scopes[token] = { projectId, signal, imageBudget: { left: MAX_IMAGES_PER_TURN }, reviewBudget: { left: MAX_REVIEWS_PER_TURN } };
+  scopes[token] = { projectId, signal, imageBudget: { left: getPreferences().maxImages }, reviewBudget: { left: getPreferences().maxReviews } };
   return {
     token,
     path: `/mcp/${token}`,

@@ -19,11 +19,11 @@ const GSAP_URL = `https://cdn.jsdelivr.net/npm/gsap@${GSAP_VERSION}/dist/gsap.mi
 export const GSAP_SHA256 = "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280";
 const LOCAL_SRC = "assets/vendor/gsap.min.js";
 
-const cacheFile = (): string => join(dataDir(), "vendor", `gsap-${GSAP_VERSION}.min.js`);
+export const gsapCacheFile = (): string => join(dataDir(), "vendor", `gsap-${GSAP_VERSION}.min.js`);
 
 /** The cached copy, downloading it once if needed. Null when there is none and the download failed (offline). */
 export async function ensureGsapCache(signal?: AbortSignal): Promise<string | null> {
-  const file = cacheFile();
+  const file = gsapCacheFile();
   // Trust the cached copy only if it is the bytes we pinned: it ends up inside every project and every render.
   if (existsSync(file)) {
     if (createHash("sha256").update(await readFile(file)).digest("hex") === GSAP_SHA256) return file;
