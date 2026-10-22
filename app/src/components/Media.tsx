@@ -70,12 +70,7 @@ export function MediaPanel({ project, onChanged }: { project: Project; onChanged
   return (
     <div className={`media ${dragging ? "dragging" : ""}`}>
       <div className="media-head">
-        <strong>Media</strong>
-        {inTauri ? (
-          <button onClick={() => void pick()}>Import…</button>
-        ) : (
-          <span className="muted">Import works in the desktop app</span>
-        )}
+        {inTauri ? <button onClick={() => void pick()}>Import…</button> : <span className="muted">Import works in the desktop app</span>}
       </div>
       {message && <div className="notice">{message}</div>}
       {items.length === 0 ? (

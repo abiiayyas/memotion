@@ -2,36 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { api, connect } from "./api";
 import { AllProjects } from "./components/AllProjects";
 import { BrandKits } from "./components/BrandKits";
-import { BrandPanel } from "./components/Brand";
-import { Chat } from "./components/Chat";
-import { ExportPanel } from "./components/Export";
+import { Editor } from "./components/Editor";
 import { Home } from "./components/Home";
 import { ImportDialog } from "./components/ImportDialog";
-import { MediaPanel } from "./components/Media";
-import { Preview } from "./components/Preview";
 import { Settings } from "./components/Settings";
 import { Sidebar, type View } from "./components/Sidebar";
-import { SourcesPanel } from "./components/Sources";
-import { Timeline } from "./components/Timeline";
-import { CommentsPanel } from "./components/Comments";
-import { VariablesPanel } from "./components/Variables";
-import { VoicePanel } from "./components/VoicePanel";
 import { useMarkState } from "./marks";
 import { usePlayer } from "./player";
 import type { AgentBackend, Project } from "./types";
-
-type Tab = "timeline" | "comments" | "variables" | "voice" | "media" | "sources" | "brand" | "export";
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: "timeline", label: "Timeline" },
-  { id: "comments", label: "Comments" },
-  { id: "variables", label: "Variables" },
-  { id: "voice", label: "Voice & Captions" },
-  { id: "media", label: "Media" },
-  { id: "sources", label: "Sources" },
-  { id: "brand", label: "Brand" },
-  { id: "export", label: "Export" },
-];
 
 const AGENT_LABEL: Record<AgentBackend, string> = {
   api: "AI provider",
@@ -64,7 +42,6 @@ export function App() {
   const [hasProvider, setHasProvider] = useState(false);
   const [backend, setBackend] = useState<AgentBackend>("api");
   const [reloadKey, setReloadKey] = useState(0);
-  const [tab, setTab] = useState<Tab>("timeline");
   /** A message for the director that another panel queued, tied to the project it is for. */
   const [autoPrompt, setAutoPrompt] = useState<{ projectId: string; text: string } | null>(null);
   const player = usePlayer();
@@ -117,12 +94,13 @@ export function App() {
   if (!ready) return <div className="splash">Starting…</div>;
 
   return (
-    <div className={`app ${inEditor ? "" : "pages"} ${collapsed ? "rail" : ""}`}>
+    <div className={`app ${collapsed || inEditor ? "rail" : ""}`}>
       <Sidebar
         projects={projects}
         view={inEditor ? "project" : view === "project" ? "home" : view}
         currentId={currentId}
-        collapsed={collapsed}
+        collapsed={collapsed || inEditor}
+        lockedRail={inEditor}
         onToggle={toggleSidebar}
         onHome={() => setView("home")}
         onBrandKits={() => setView("brand-kits")}
@@ -136,46 +114,22 @@ export function App() {
         openImport={() => setImportOpen(true)}
       />
       {inEditor && current ? (
-        <>
-          <main className="center">
-            <Preview key={current.id} project={current} reloadKey={reloadKey} player={player} marks={marks} />
-            <div className="tabs">
-              <div role="tablist">
-                {TABS.map((t) => (
-                  <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
-                    {t.label}
-                    {t.id === "comments" && marks.comments.some((c) => c.status === "open") ? ` (${marks.comments.filter((c) => c.status === "open").length})` : ""}
-                  </button>
-                ))}
-              </div>
-              <div className={`tab-body ${tab}`}>
-                {tab === "timeline" && <Timeline key={current.id} project={current} player={player} reloadKey={reloadKey} onEdited={reload} />}
-                {tab === "comments" && (
-                  <CommentsPanel project={current} marks={marks} onAsk={(text) => setAutoPrompt({ projectId: current.id, text })} onSeek={player.seek} />
-                )}
-                {tab === "variables" && <VariablesPanel project={current} reloadKey={reloadKey} onEdited={reload} />}
-                {tab === "voice" && <VoicePanel project={current} onEdited={reload} />}
-                {tab === "media" && <MediaPanel project={current} onChanged={reload} />}
-                {tab === "sources" && (
-                  <SourcesPanel project={current} onEdited={reload} onAsk={(text) => setAutoPrompt({ projectId: current.id, text })} openSettings={() => setSettingsOpen(true)} />
-                )}
-                {tab === "brand" && <BrandPanel key={current.id} project={current} onProjectChanged={() => void refreshProjects()} onEdited={reload} />}
-                {tab === "export" && <ExportPanel project={current} />}
-              </div>
-            </div>
-          </main>
-          <Chat
-            key={current.id}
-            project={current}
-            onFilesChanged={reload}
-            hasProvider={hasProvider}
-            agentLabel={AGENT_LABEL[backend]}
-            marks={marks}
-            openSettings={() => setSettingsOpen(true)}
-            autoSend={autoPrompt?.projectId === current.id ? autoPrompt.text : null}
-            onAutoSent={() => setAutoPrompt(null)}
-          />
-        </>
+        <Editor
+          project={current}
+          reloadKey={reloadKey}
+          onReload={reload}
+          player={player}
+          marks={marks}
+          hasProvider={hasProvider}
+          agentLabel={AGENT_LABEL[backend]}
+          openSettings={() => setSettingsOpen(true)}
+          autoSend={autoPrompt?.projectId === current.id ? autoPrompt.text : null}
+          onAutoSent={() => setAutoPrompt(null)}
+          onAsk={(text) => setAutoPrompt({ projectId: current.id, text })}
+          onProjectChanged={() => void refreshProjects()}
+          onRenamed={(renamed) => setProjects((prev) => prev.map((x) => (x.id === renamed.id ? renamed : x)))}
+          onHome={() => setView("home")}
+        />
       ) : view === "brand-kits" ? (
         <BrandKits onChanged={() => void refreshProjects()} />
       ) : view === "projects" ? (
@@ -201,7 +155,6 @@ export function App() {
             setProjects((prev) => [project, ...prev]);
             setCurrentId(project.id);
             setView("project");
-            setTab("timeline");
             // The director starts on its own: the user already said what they want.
             setAutoPrompt({ projectId: project.id, text: prompt });
           }}
@@ -215,7 +168,6 @@ export function App() {
             setProjects((prev) => [project, ...prev]);
             setCurrentId(project.id);
             setView("project");
-            setTab("timeline");
             if (prompt) setAutoPrompt({ projectId: project.id, text: prompt });
           }}
         />

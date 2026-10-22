@@ -1,6 +1,6 @@
 const base = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
-export type IconName = "home" | "brand" | "plus" | "search" | "sidebar" | "grid" | "arrow-up" | "film" | "ratio" | "layout" | "template" | "agent" | "settings" | "import" | "trash" | "x" | "chevron";
+export type IconName = "home" | "brand" | "plus" | "search" | "sidebar" | "grid" | "arrow-up" | "film" | "ratio" | "layout" | "template" | "agent" | "settings" | "import" | "trash" | "x" | "chevron" | "chevron-left" | "folder" | "captions" | "sliders" | "comment" | "globe" | "download" | "panel-right";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   home: <path d="M4 11l8-7 8 7v8.5a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />,
@@ -69,6 +69,33 @@ const PATHS: Record<IconName, React.ReactNode> = {
   trash: <path d="M5 7h14M10 7V4.5h4V7M7 7l.8 12h8.4L17 7" />,
   x: <path d="M6 6l12 12M18 6L6 18" />,
   chevron: <path d="M7 10l5 5 5-5" />,
+  "chevron-left": <path d="M14 7l-5 5 5 5" />,
+  folder: <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2.5h6.5A1.5 1.5 0 0 1 20 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" />,
+  captions: (
+    <>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="3" />
+      <path d="M8 11.5h2M8 14.5h4M14 11.5h2M14.5 14.5h1.5" />
+    </>
+  ),
+  sliders: <path d="M5 8h9M18 8h1M5 16h1M10 16h9M14 5.5v5M6 13.5v5" />,
+  comment: (
+    <>
+      <path d="M12 4.5c-4.4 0-8 2.9-8 6.5 0 2 1.1 3.7 2.8 4.9L6 20l4-2.1c.6.1 1.3.2 2 .2 4.4 0 8-2.9 8-6.5S16.4 4.5 12 4.5z" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M4 12h16M12 4c2.5 2.3 3.5 5 3.5 8s-1 5.7-3.5 8c-2.5-2.3-3.5-5-3.5-8S9.5 6.3 12 4z" />
+    </>
+  ),
+  download: <path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" />,
+  "panel-right": (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+      <path d="M14.5 4.5v15" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {

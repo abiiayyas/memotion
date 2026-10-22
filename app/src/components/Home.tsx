@@ -5,7 +5,8 @@ import { api } from "../api";
 import { ago, avatarHue, nameFromPrompt } from "../projectName";
 import type { AgentBackend, AgentsInfo, BrandKit, FileVariables, Format, Orientation, Project, TemplateInfo, VariableFill, VariableValue } from "../types";
 import { FillField, TemplateThumb } from "./TemplateFill";
-import { Icon, type IconName } from "./Icons";
+import { ChipSelect } from "./ChipSelect";
+import { Icon } from "./Icons";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 const MEDIA_EXT = ["png", "jpg", "jpeg", "webp", "gif", "svg", "mp4", "mov", "webm", "m4v", "mp3", "wav", "m4a", "aac", "ogg", "flac", "ttf", "otf", "woff", "woff2"];
@@ -18,19 +19,6 @@ export function ProjectAvatar({ project, size = 28 }: { project: Pick<Project, "
     <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.46, background: `hsl(${avatarHue(project.id)} 62% 46%)` }} aria-hidden="true">
       {project.name.trim().charAt(0).toUpperCase() || "?"}
     </span>
-  );
-}
-
-/** A pill that is really a native <select>: keyboard and screen-reader behaviour for free. */
-function ChipSelect({ icon, label, value, onChange, children, disabled, title, active }: { icon: IconName; label: string; value: string; onChange: (v: string) => void; children: React.ReactNode; disabled?: boolean; title?: string; /** Highlighted when it differs from the default. */ active: boolean }) {
-  return (
-    <label className={`chip-select ${active ? "active" : ""}`} title={title}>
-      <Icon name={icon} size={15} />
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
-        {children}
-      </select>
-      <Icon name="chevron" size={13} />
-    </label>
   );
 }
 

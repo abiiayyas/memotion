@@ -22,6 +22,7 @@ export function Chat({
   hasProvider,
   agentLabel,
   marks,
+  chips,
   openSettings,
   autoSend,
   onAutoSent,
@@ -33,6 +34,8 @@ export function Chat({
   agentLabel: string;
   /** What the user marked in the preview; goes with the next message. */
   marks: MarkState;
+  /** Per-video choices shown above the message box. */
+  chips?: React.ReactNode;
   openSettings: () => void;
   /** A message another panel wants sent (e.g. the Remotion conversion brief). Sent once, then cleared. */
   autoSend: string | null;
@@ -200,6 +203,7 @@ export function Chat({
           )}
         </div>
       )}
+      {chips}
       <form
         className="composer"
         onSubmit={(e) => {

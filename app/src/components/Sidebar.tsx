@@ -13,6 +13,7 @@ export function Sidebar({
   view,
   currentId,
   collapsed,
+  lockedRail,
   onToggle,
   onHome,
   onBrandKits,
@@ -26,6 +27,8 @@ export function Sidebar({
   view: View;
   currentId: string | null;
   collapsed: boolean;
+  /** The editor needs the room: the sidebar stays a rail there, so there is nothing to toggle. */
+  lockedRail: boolean;
   onToggle: () => void;
   onHome: () => void;
   onBrandKits: () => void;
@@ -50,9 +53,11 @@ export function Sidebar({
       </div>
 
       <div className="side-tools">
-        <button className="icon-btn" onClick={onToggle} aria-label={collapsed ? "Show the sidebar" : "Hide the sidebar"} title={collapsed ? "Show the sidebar" : "Hide the sidebar"}>
-          <Icon name="sidebar" />
-        </button>
+        {!lockedRail && (
+          <button className="icon-btn" onClick={onToggle} aria-label={collapsed ? "Show the sidebar" : "Hide the sidebar"} title={collapsed ? "Show the sidebar" : "Hide the sidebar"}>
+            <Icon name="sidebar" />
+          </button>
+        )}
         <button className="icon-btn" onClick={onSearch} aria-label="Search projects" title="Search projects">
           <Icon name="search" />
         </button>
