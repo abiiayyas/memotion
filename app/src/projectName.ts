@@ -32,3 +32,4 @@ export function ago(iso: string, now: number = Date.now()): string {
   if (s < 86400 * 14) return `${Math.floor(s / 86400)} d ago`;
   return new Date(iso).toLocaleDateString();
 }
+export const probe: number = "not a number";
