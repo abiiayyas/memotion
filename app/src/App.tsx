@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, connect } from "./api";
+import { AllProjects } from "./components/AllProjects";
+import { BrandKits } from "./components/BrandKits";
 import { BrandPanel } from "./components/Brand";
 import { Chat } from "./components/Chat";
 import { ExportPanel } from "./components/Export";
+import { Home } from "./components/Home";
 import { ImportDialog } from "./components/ImportDialog";
 import { MediaPanel } from "./components/Media";
 import { Preview } from "./components/Preview";
 import { Settings } from "./components/Settings";
-import { Sidebar } from "./components/Sidebar";
+import { Sidebar, type View } from "./components/Sidebar";
 import { SourcesPanel } from "./components/Sources";
 import { Timeline } from "./components/Timeline";
 import { CommentsPanel } from "./components/Comments";
@@ -37,11 +40,25 @@ const AGENT_LABEL: Record<AgentBackend, string> = {
   opencode: "OpenCode",
 };
 
+const SIDEBAR_KEY = "memotion.sidebar";
+
+function savedCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "rail";
+  } catch {
+    return false;
+  }
+}
+
 export function App() {
   const [ready, setReady] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  /** Opening the app lands on Home: a prompt box, not an editor. */
+  const [view, setView] = useState<View>("home");
+  const [collapsed, setCollapsed] = useState(savedCollapsed);
+  const [searchTick, setSearchTick] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [hasProvider, setHasProvider] = useState(false);
@@ -68,7 +85,6 @@ export function App() {
       await connect();
       const list = await api.projects();
       setProjects(list);
-      setCurrentId(list[0]?.id ?? null);
       await refreshProviders();
       setReady(true);
     })().catch((e: Error) => setFatal(e.message));
@@ -82,28 +98,44 @@ export function App() {
     setReloadKey((k) => k + 1);
   }, [rememberTime]);
 
+  const openProject = (id: string) => {
+    setCurrentId(id);
+    setView("project");
+  };
+  const toggleSidebar = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(SIDEBAR_KEY, c ? "full" : "rail");
+      } catch {
+        // the choice just is not remembered
+      }
+      return !c;
+    });
+  const inEditor = view === "project" && current !== null;
+
   if (fatal) return <div className="splash error">Could not start: {fatal}</div>;
   if (!ready) return <div className="splash">Starting…</div>;
 
   return (
-    <div className="app">
+    <div className={`app ${inEditor ? "" : "pages"} ${collapsed ? "rail" : ""}`}>
       <Sidebar
         projects={projects}
+        view={inEditor ? "project" : view === "project" ? "home" : view}
         currentId={currentId}
-        onSelect={setCurrentId}
-        onCreated={(p) => {
-          setProjects((prev) => [p, ...prev]);
-          setCurrentId(p.id);
+        collapsed={collapsed}
+        onToggle={toggleSidebar}
+        onHome={() => setView("home")}
+        onBrandKits={() => setView("brand-kits")}
+        onAllProjects={() => setView("projects")}
+        onSearch={() => {
+          setView("projects");
+          setSearchTick((n) => n + 1);
         }}
-        onDeleted={(id) => {
-          const rest = projects.filter((p) => p.id !== id);
-          setProjects(rest);
-          if (currentId === id) setCurrentId(rest[0]?.id ?? null);
-        }}
+        onSelect={openProject}
         openSettings={() => setSettingsOpen(true)}
         openImport={() => setImportOpen(true)}
       />
-      {current ? (
+      {inEditor && current ? (
         <>
           <main className="center">
             <Preview key={current.id} project={current} reloadKey={reloadKey} player={player} marks={marks} />
@@ -144,16 +176,36 @@ export function App() {
             onAutoSent={() => setAutoPrompt(null)}
           />
         </>
+      ) : view === "brand-kits" ? (
+        <BrandKits onChanged={() => void refreshProjects()} />
+      ) : view === "projects" ? (
+        <AllProjects
+          projects={projects}
+          focusSearch={searchTick}
+          onOpen={openProject}
+          onDeleted={(id) => {
+            setProjects((prev) => prev.filter((p) => p.id !== id));
+            if (currentId === id) setCurrentId(null);
+          }}
+        />
       ) : (
-        <main className="center empty-state">
-          <h1>Make a video from a prompt</h1>
-          <p>Create a project, choose 16:9 or 9:16, then describe what you want.</p>
-          {!hasProvider && (
-            <button className="primary" onClick={() => setSettingsOpen(true)}>
-              Choose who writes the video
-            </button>
-          )}
-        </main>
+        <Home
+          projects={projects}
+          hasProvider={hasProvider}
+          backend={backend}
+          openSettings={() => setSettingsOpen(true)}
+          onBackendChanged={() => void refreshProviders()}
+          onOpen={openProject}
+          onShowAll={() => setView("projects")}
+          onStarted={(project, prompt) => {
+            setProjects((prev) => [project, ...prev]);
+            setCurrentId(project.id);
+            setView("project");
+            setTab("timeline");
+            // The director starts on its own: the user already said what they want.
+            setAutoPrompt({ projectId: project.id, text: prompt });
+          }}
+        />
       )}
       {settingsOpen && <Settings onClose={() => setSettingsOpen(false)} onChanged={() => void refreshProviders()} />}
       {importOpen && (
@@ -162,6 +214,7 @@ export function App() {
           onImported={(project, prompt) => {
             setProjects((prev) => [project, ...prev]);
             setCurrentId(project.id);
+            setView("project");
             setTab("timeline");
             if (prompt) setAutoPrompt({ projectId: project.id, text: prompt });
           }}

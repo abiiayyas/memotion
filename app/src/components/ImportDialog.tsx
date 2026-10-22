@@ -92,7 +92,7 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
               {analysis.facts.orientation === "portrait" ? "9:16" : "16:9"} at {analysis.facts.fps} fps, {analysis.sourceFiles} source files.
               {blockers.length > 0 && (
                 <>
-                  <strong style={{ display: "block", marginTop: 6, color: "#ffb3bc" }}>These will not translate:</strong>
+                  <strong style={{ display: "block", marginTop: 6, color: "var(--err-ink)" }}>These will not translate:</strong>
                   <ul>{blockers.map((f, i) => <li key={i}><code>{f.file}</code>: {f.message}</li>)}</ul>
                 </>
               )}

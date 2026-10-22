@@ -44,9 +44,10 @@ export function Chat({
   const abort = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
+  // The chat is keyed by project, so it starts empty; nothing here may clear it. React runs effects twice in development,
+  // and a reset here would wipe a message that an automatic send (from Home or an import) had already added.
   useEffect(() => {
-    setItems([]);
-    // A message sent before the history arrives (an automatic one) must not be wiped by the late response.
+    // A message sent before the history arrives must not be wiped by the late response.
     api.history(project.id).then((h) => setItems((prev) => (prev.length > 0 ? prev : h)), () => undefined);
   }, [project.id]);
 
