@@ -1,6 +1,6 @@
 const base = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
-export type IconName = "home" | "brand" | "plus" | "search" | "sidebar" | "grid" | "arrow-up" | "film" | "ratio" | "layout" | "template" | "agent" | "settings" | "import" | "trash" | "x" | "chevron" | "chevron-left" | "folder" | "captions" | "sliders" | "comment" | "globe" | "download" | "panel-right";
+export type IconName = "home" | "brand" | "plus" | "search" | "sidebar" | "grid" | "arrow-up" | "film" | "ratio" | "layout" | "template" | "agent" | "settings" | "import" | "trash" | "x" | "chevron" | "chevron-left" | "folder" | "captions" | "sliders" | "comment" | "globe" | "download" | "panel-right" | "panel-left";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   home: <path d="M4 11l8-7 8 7v8.5a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />,
@@ -90,6 +90,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   download: <path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" />,
+  "panel-left": (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+      <path d="M9.5 4.5v15" />
+    </>
+  ),
   "panel-right": (
     <>
       <rect x="3.5" y="4.5" width="17" height="15" rx="3" />

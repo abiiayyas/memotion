@@ -26,12 +26,21 @@ const PANEL_TABS: { id: PanelTab; label: string; icon: IconName }[] = [
 ];
 
 const PANEL_KEY = "memotion.panel";
+const DIRECTOR_KEY = "memotion.director";
 
-function savedPanelOpen(): boolean {
+function savedOpen(key: string): boolean {
   try {
-    return localStorage.getItem(PANEL_KEY) !== "closed";
+    return localStorage.getItem(key) !== "closed";
   } catch {
     return true;
+  }
+}
+
+function remember(key: string, open: boolean): void {
+  try {
+    localStorage.setItem(key, open ? "open" : "closed");
+  } catch {
+    // not remembered
   }
 }
 
@@ -142,7 +151,8 @@ export interface EditorProps {
 export function Editor(p: EditorProps) {
   const { project } = p;
   const [tab, setTab] = useState<PanelTab>("media");
-  const [panelOpen, setPanelOpen] = useState(savedPanelOpen);
+  const [panelOpen, setPanelOpen] = useState(() => savedOpen(PANEL_KEY));
+  const [directorOpen, setDirectorOpen] = useState(() => savedOpen(DIRECTOR_KEY));
   const [exportOpen, setExportOpen] = useState(false);
   /** Once opened, the export dialog stays mounted (hidden) so a render in progress keeps showing its progress. */
   const [exportSeen, setExportSeen] = useState(false);
@@ -151,12 +161,17 @@ export function Editor(p: EditorProps) {
 
   const setOpen = useCallback((open: boolean) => {
     setPanelOpen(open);
-    try {
-      localStorage.setItem(PANEL_KEY, open ? "open" : "closed");
-    } catch {
-      // not remembered
-    }
+    remember(PANEL_KEY, open);
   }, []);
+  const setDirector = useCallback((open: boolean) => {
+    setDirectorOpen(open);
+    remember(DIRECTOR_KEY, open);
+  }, []);
+
+  // A message another panel queues (Comments, Sources) is for the director: show it.
+  useEffect(() => {
+    if (p.autoSend) setDirector(true);
+  }, [p.autoSend, setDirector]);
 
   function pick(id: PanelTab) {
     // Clicking the open tab again folds the panel away.
@@ -186,8 +201,13 @@ export function Editor(p: EditorProps) {
         </button>
       </header>
 
-      <div className={`editor-main ${panelOpen ? "" : "panel-closed"}`}>
+      <div className={`editor-main ${panelOpen ? "" : "panel-closed"} ${directorOpen ? "" : "director-closed"}`}>
         <section className="card director">
+          {!directorOpen && (
+            <button className="side-tab rail-open" onClick={() => setDirector(true)} title="Show the director" aria-label="Show the director">
+              <Icon name="panel-left" size={19} />
+            </button>
+          )}
           <Chat
             key={project.id}
             project={project}
@@ -198,6 +218,7 @@ export function Editor(p: EditorProps) {
             openSettings={p.openSettings}
             autoSend={p.autoSend}
             onAutoSent={p.onAutoSent}
+            onCollapse={() => setDirector(false)}
             chips={<ProjectChips project={project} onProjectChanged={p.onProjectChanged} onEdited={p.onReload} />}
           />
         </section>

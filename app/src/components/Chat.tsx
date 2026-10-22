@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, chat } from "../api";
 import type { MarkState } from "../marks";
+import { Icon } from "./Icons";
 import type { ChatContext, ChatItem, Project } from "../types";
 
 type Item = ChatItem | { kind: "error"; text: string };
@@ -23,6 +24,7 @@ export function Chat({
   agentLabel,
   marks,
   chips,
+  onCollapse,
   openSettings,
   autoSend,
   onAutoSent,
@@ -36,6 +38,8 @@ export function Chat({
   marks: MarkState;
   /** Per-video choices shown above the message box. */
   chips?: React.ReactNode;
+  /** Fold the director away (the editor keeps this chat mounted, so a run in progress carries on). */
+  onCollapse?: () => void;
   openSettings: () => void;
   /** A message another panel wants sent (e.g. the Remotion conversion brief). Sent once, then cleared. */
   autoSend: string | null;
@@ -148,7 +152,13 @@ export function Chat({
   return (
     <div className="chat">
       <div className="chat-head">
+        {onCollapse && (
+          <button className="icon-btn" onClick={onCollapse} aria-label="Hide the director" title="Hide the director">
+            <Icon name="panel-left" size={18} />
+          </button>
+        )}
         <strong>Director</strong> <small className="agent-tag">{agentLabel}</small>
+        <span className="grow" />
         <button className="link" onClick={clear} disabled={busy || items.length === 0}>
           New conversation
         </button>

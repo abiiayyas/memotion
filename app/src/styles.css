@@ -409,8 +409,9 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .title-btn:hover { background: var(--hover); }
 .title-input { width: min(420px, 46vw); border-color: var(--accent); background: var(--panel); }
 .export-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; border-radius: 999px; padding: 6px 14px; }
-.editor-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) 380px; gap: 8px; }
-.editor-main.panel-closed { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) 52px; }
+.editor-main { --dir-w: minmax(280px, 340px); --panel-w: 380px; flex: 1; min-height: 0; display: grid; grid-template-columns: var(--dir-w) minmax(0, 1fr) var(--panel-w); gap: 8px; }
+.editor-main.director-closed { --dir-w: 52px; }
+.editor-main.panel-closed { --panel-w: 52px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .stage-card { background: var(--stage); border-color: transparent; }
 .stage-card .transport { background: var(--stage); border-top: 1px solid #ffffff14; color: #e8eaee; }
@@ -435,3 +436,11 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 
 /* The tools sit at the bottom-left of the video (as in HyperFrames) so they cover as little of it as possible. */
 .mark-dock { left: 12px; transform: none; align-items: flex-start; max-width: calc(100% - 24px); }
+
+/* A folded director keeps its chat mounted (a run in progress carries on); only an icon shows. */
+.director.card { position: relative; }
+.editor-main.director-closed .director .chat { display: none; }
+.director .rail-open { margin: 8px auto 0; }
+.chat-head { gap: 8px; justify-content: flex-start; }
+.chat-head .grow { flex: 1; }
+.chat-head .icon-btn { margin-left: -6px; flex: none; }
