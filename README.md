@@ -1,5 +1,7 @@
 # Memotion
 
+[![CI](https://github.com/abiiayyas/memotion/actions/workflows/ci.yml/badge.svg)](https://github.com/abiiayyas/memotion/actions/workflows/ci.yml)
+
 Prompt-to-video desktop app. You describe a video; an AI agent writes an HTML/GSAP composition; the app previews it and renders MP4 (16:9 or 9:16, 30 or 60 fps). Rendering uses the open-source [HyperFrames](https://github.com/heygen-com/hyperframes) engine (Apache-2.0), pinned to `0.8.168`.
 
 ## Architecture
@@ -20,6 +22,12 @@ React UI  ◀── HTTP + SSE ─────────────┤  hyper
 ## Logo and icons
 
 The master logo is `assets/logo_memotion.png` (10000×10000, transparent). Derived files, all made from it: `assets/app-icon-1024.png` (the mark on a dark rounded square with a 100 px transparent margin, as macOS expects), `app/src/assets/logo-mark.png` (tight crop, sidebar), `app/public/favicon.png`, and the whole `app/src-tauri/icons/` set, generated with `pnpm --filter app tauri icon ../assets/app-icon-1024.png` (the iOS and Android folders it also writes are deleted: desktop only). To change the logo, replace the master, redo the 1024 icon, and run that command again.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, on `ubuntu-latest`: install (frozen lockfile), typecheck, Chrome for the renderer, all tests (the sidecar tests make real previews, snapshots and renders, so they need Chrome and ffmpeg), the UI build and the sidecar bundle build. The first run took about 2.5 minutes and executed the same 195 tests as a laptop (5 skipped: the opt-in live ones). A pull request with a deliberate type error was checked to fail at the typecheck step with the right message, then closed.
+
+Not in CI: the Tauri/Rust build (it needs the system WebKit libraries and takes minutes; build it locally with `pnpm build`), macOS-specific behaviour (the packaged app, Keychain, the login-shell `PATH`), and the opt-in live tests (`MEMOTION_LIVE_TESTS=1`: real Edge TTS, whisper.cpp, downloads).
 
 ## Develop
 
