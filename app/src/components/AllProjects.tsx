@@ -10,16 +10,16 @@ export function AllProjects({
   projects,
   focusSearch,
   onOpen,
-  onDeleted,
+  onDelete,
 }: {
   projects: Project[];
   /** Bumped by the sidebar's search button. */
   focusSearch: number;
   onOpen: (id: string) => void;
-  onDeleted: (id: string) => void;
+  /** Ask to delete a project (the app shows the confirmation). */
+  onDelete: (project: Project) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [armed, setArmed] = useState<string | null>(null);
   const [saving, setSaving] = useState<{ projectId: string; name: string; description: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -32,23 +32,6 @@ export function AllProjects({
 
   const q = query.trim().toLowerCase();
   const list = q ? projects.filter((p) => p.name.toLowerCase().includes(q)) : projects;
-
-  async function remove(p: Project) {
-    // window.confirm is not reliable in the desktop webview: ask twice instead.
-    if (armed !== p.id) {
-      setArmed(p.id);
-      setTimeout(() => setArmed((a) => (a === p.id ? null : a)), 3500);
-      return;
-    }
-    setArmed(null);
-    setError(null);
-    try {
-      await api.deleteProject(p.id);
-      onDeleted(p.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
 
   async function saveTemplate() {
     if (!saving || !saving.name.trim()) return;
@@ -93,8 +76,8 @@ export function AllProjects({
               <button className="pl-act" onClick={() => setSaving({ projectId: p.id, name: p.name, description: "" })} aria-label={`Save ${p.name} as template`} title="Save as template">
                 Save as template
               </button>
-              <button className={`pl-act ${armed === p.id ? "armed" : ""}`} onClick={() => void remove(p)} aria-label={`Delete ${p.name}`}>
-                {armed === p.id ? "Click again to delete" : <Icon name="trash" size={16} />}
+              <button className="pl-act" onClick={() => onDelete(p)} aria-label={`Delete ${p.name}`} title="Delete project">
+                <Icon name="trash" size={16} />
               </button>
             </li>
           ))}

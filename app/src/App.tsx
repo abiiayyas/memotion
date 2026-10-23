@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, connect } from "./api";
 import { AllProjects } from "./components/AllProjects";
+import { ConfirmDelete } from "./components/ConfirmDelete";
 import { BrandKits } from "./components/BrandKits";
 import { Editor } from "./components/Editor";
 import { Home } from "./components/Home";
@@ -36,6 +37,10 @@ export function App() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   /** Opening the app lands on Home: a prompt box, not an editor. */
   const [view, setView] = useState<View>("home");
+  /** The project the user asked to delete, until they confirm or cancel. */
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(savedCollapsed);
   const [searchTick, setSearchTick] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -80,6 +85,33 @@ export function App() {
     setCurrentId(id);
     setView("project");
   };
+  const askDelete = (p: Project) => {
+    setDeleteError(null);
+    setPendingDelete(p);
+  };
+  const cancelDelete = useCallback(() => setPendingDelete(null), []);
+  async function confirmDelete() {
+    if (!pendingDelete || deleting) return;
+    const { id } = pendingDelete;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteProject(id);
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      // Leave the editor of a project that no longer exists, and drop work queued for it.
+      if (currentId === id) {
+        setCurrentId(null);
+        setView((v) => (v === "project" ? "home" : v));
+      }
+      setAutoPrompt((a) => (a?.projectId === id ? null : a));
+      setPendingDelete(null);
+    } catch (e) {
+      // The dialog stays open with the reason (for example: the director is still working on it).
+      setDeleteError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleting(false);
+    }
+  }
   const toggleSidebar = () =>
     setCollapsed((c) => {
       try {
@@ -111,6 +143,7 @@ export function App() {
           setSearchTick((n) => n + 1);
         }}
         onSelect={openProject}
+        onDelete={askDelete}
         openSettings={() => setSettingsOpen(true)}
         openImport={() => setImportOpen(true)}
       />
@@ -138,10 +171,7 @@ export function App() {
           projects={projects}
           focusSearch={searchTick}
           onOpen={openProject}
-          onDeleted={(id) => {
-            setProjects((prev) => prev.filter((p) => p.id !== id));
-            if (currentId === id) setCurrentId(null);
-          }}
+          onDelete={askDelete}
         />
       ) : (
         <Home
@@ -161,6 +191,7 @@ export function App() {
           }}
         />
       )}
+      {pendingDelete && <ConfirmDelete project={pendingDelete} busy={deleting} error={deleteError} onCancel={cancelDelete} onConfirm={() => void confirmDelete()} />}
       {settingsOpen && <Settings onClose={() => setSettingsOpen(false)} onChanged={() => void refreshProviders()} />}
       {importOpen && (
         <ImportDialog

@@ -504,3 +504,13 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
   .sd-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); }
 }
 .transport button.skip { padding: 6px 8px; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* Delete beside a project in the sidebar, and its confirmation */
+.side-projects li { position: relative; }
+.side-projects .nav-item { padding-right: 34px; }
+.side-del { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted); opacity: 0; transition: opacity 0.12s; }
+.side-projects li:hover .side-del, .side-del:focus-visible, .side-projects li:has(.nav-item.on) .side-del { opacity: 1; }
+.side-del:hover { background: var(--hover); color: var(--bad); }
+.sidebar.rail .side-del { display: none; }
+.confirm-project { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.confirm-project strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

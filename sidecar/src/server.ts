@@ -15,7 +15,7 @@ import { registerPreviewProxy } from "./preview/proxy.js";
 import { registerMarkRoutes } from "./routes/marks.js";
 import { runCliAgent } from "./agents/run.js";
 import { registerContentRoutes } from "./routes/content.js";
-import { ensurePreview, withFreshPreview } from "./engine/preview.js";
+import { ensurePreview, stopPreview, withFreshPreview } from "./engine/preview.js";
 import { EditOp, editTimeline, readTimeline, undoTimeline } from "./engine/timeline.js";
 import { cancelJob, getJob, listJobs, renderEvents, startRender, type RenderJob } from "./engine/render.js";
 import { listModels, testProvider } from "./providers/client.js";
@@ -185,7 +185,13 @@ export function buildApp(opts: ServerOptions): Hono {
     return c.json(await renameProject(c.req.param("id"), name));
   });
   app.delete("/projects/:id", async (c) => {
-    await deleteProject(c.req.param("id"));
+    const id = c.req.param("id");
+    // Files must not vanish under a running director or render: both would fail halfway and recreate stray folders.
+    if (isAgentRunning(id)) return c.json({ error: "The director is working on this video. Stop it first, then delete." }, 409);
+    if (listJobs(id).some((j) => j.status === "running")) return c.json({ error: "A render of this video is still running. Cancel it first, then delete." }, 409);
+    // The preview server keeps running on a deleted folder otherwise.
+    stopPreview(id);
+    await deleteProject(id);
     return c.json({ ok: true });
   });
   app.get("/projects/:id/files", async (c) => c.json(await listFiles(c.req.param("id"))));

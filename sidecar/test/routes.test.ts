@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/server.js";
+import { claimProject } from "../src/agent/loop.js";
 import { createProject, projectPath } from "../src/projects/store.js";
 
 const dataDir = mkdtempSync(join(tmpdir(), "memotion-routes-"));
@@ -143,4 +144,34 @@ describe("templates and imports over HTTP", () => {
     expect(imported.status).toBe(200);
     expect((await call("POST", "/projects/import/hyperframes", { path: scratch })).status).toBe(500);
   }, 240_000);
+});
+
+describe("deleting a project", () => {
+  it("removes the project's folder and answers ok; a second delete of the same id is still ok (nothing left to remove)", async () => {
+    const { id } = await createProject({ name: "To delete", orientation: "landscape" });
+    expect(existsSync(projectPath(id))).toBe(true);
+    const res = await call("DELETE", `/projects/${id}`);
+    expect(res.status).toBe(200);
+    expect(existsSync(projectPath(id))).toBe(false);
+    expect((await call("DELETE", `/projects/${id}`)).status).toBe(200);
+  });
+
+  it("refuses while the director is working on it, and the files stay", async () => {
+    const { id } = await createProject({ name: "Busy", orientation: "landscape" });
+    const release = claimProject(id);
+    expect(release).not.toBeNull();
+    const res = await call("DELETE", `/projects/${id}`);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/director is working/);
+    expect(existsSync(projectPath(id))).toBe(true);
+    release?.();
+    expect((await call("DELETE", `/projects/${id}`)).status).toBe(200);
+    expect(existsSync(projectPath(id))).toBe(false);
+  });
+
+  it("needs the token like every other route", async () => {
+    const { id } = await createProject({ name: "Guarded", orientation: "landscape" });
+    expect((await call("DELETE", `/projects/${id}`, undefined, HOST)).status).toBe(401);
+    expect(existsSync(projectPath(id))).toBe(true);
+  });
 });

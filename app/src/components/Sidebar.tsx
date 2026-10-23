@@ -20,6 +20,7 @@ export function Sidebar({
   onAllProjects,
   onSearch,
   onSelect,
+  onDelete,
   openSettings,
   openImport,
 }: {
@@ -35,6 +36,8 @@ export function Sidebar({
   onAllProjects: () => void;
   onSearch: () => void;
   onSelect: (id: string) => void;
+  /** Ask to delete a project (the app shows the confirmation). */
+  onDelete: (project: Project) => void;
   openSettings: () => void;
   openImport: () => void;
 }) {
@@ -85,6 +88,11 @@ export function Sidebar({
               <ProjectAvatar project={p} size={22} />
               {!collapsed && <span className="ellipsis">{p.name}</span>}
             </button>
+            {!collapsed && (
+              <button className="side-del" onClick={() => onDelete(p)} aria-label={`Delete ${p.name}`} title="Delete project">
+                <Icon name="trash" size={15} />
+              </button>
+            )}
           </li>
         ))}
         <li>
