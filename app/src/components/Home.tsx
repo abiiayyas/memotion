@@ -8,6 +8,7 @@ import type { AgentBackend, AgentsInfo, BrandKit, FileVariables, Format, Orienta
 import { FillField, TemplateThumb } from "./TemplateFill";
 import { ChipSelect } from "./ChipSelect";
 import { Icon } from "./Icons";
+import { RotatingHeadline } from "./RotatingHeadline";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 const MEDIA_EXT = ["png", "jpg", "jpeg", "webp", "gif", "svg", "mp4", "mov", "webm", "m4v", "mp3", "wav", "m4a", "aac", "ogg", "flac", "ttf", "otf", "woff", "woff2"];
@@ -207,7 +208,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
 
   return (
     <main className="home">
-      <h1>Make something.</h1>
+      <RotatingHeadline />
 
       <form
         className="prompt-box"

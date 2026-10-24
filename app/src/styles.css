@@ -332,6 +332,9 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .search-field input { border: 0; background: transparent; padding: 8px 0; outline: none; }
 .home { padding-top: 7vh; }
 .home h1 { margin: 0 0 6px; font-size: clamp(34px, 5.2vw, 54px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; }
+.headline-ending { display: inline-block; animation: headline-in 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes headline-in { from { opacity: 0; transform: translateY(0.35em); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .headline-ending { animation: none; } }
 
 .prompt-box { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 14px 14px 12px; box-shadow: 0 6px 30px var(--shadow); display: flex; flex-direction: column; gap: 10px; }
 .prompt-box:focus-within { border-color: var(--accent); }
