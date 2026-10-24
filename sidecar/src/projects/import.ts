@@ -1,4 +1,6 @@
-import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { findRemotionCli, findRemotionEntry, mountRenderedVideo, readMp4Info } from "./remotionRender.js";
 import { existsSync } from "node:fs";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -115,20 +117,30 @@ export function lintRemotionSource(files: { path: string; text: string }[]): Rem
   return found;
 }
 
-/** Orientation and frame rate come from the first `<Composition … width height fps>`. */
-export function readRemotionFacts(files: { text: string }[]): CompositionFacts {
+/** Ids of every `<Composition id="…">`, in source order. */
+export function readCompositionIds(files: { text: string }[]): string[] {
+  const ids: string[] = [];
   for (const f of files) {
-    const tag = /<Composition\b[\s\S]*?\/?>/.exec(f.text)?.[0];
-    if (!tag) continue;
-    const num = (name: string): number | null => {
-      const m = new RegExp(`\\b${name}=\\{?\\s*([0-9.]+)\\s*\\}?`).exec(tag);
-      return m?.[1] ? Number(m[1]) : null;
-    };
-    const w = num("width");
-    const h = num("height");
-    return { orientation: w !== null && h !== null && h > w ? "portrait" : "landscape", fps: num("fps") === 60 ? 60 : 30 };
+    for (const tag of f.text.matchAll(/<Composition\b[\s\S]*?\/?>/g)) {
+      const id = /\bid=\{?\s*["'`]([\w-]+)["'`]/.exec(tag[0])?.[1];
+      if (id && !ids.includes(id)) ids.push(id);
+    }
   }
-  return { orientation: "landscape", fps: 30 };
+  return ids;
+}
+
+/** Orientation and frame rate come from `<Composition … width height fps>`: the one named `compositionId`, else the first. */
+export function readRemotionFacts(files: { text: string }[], compositionId?: string): CompositionFacts {
+  const tags = files.flatMap((f) => [...f.text.matchAll(/<Composition\b[\s\S]*?\/?>/g)].map((m) => m[0]));
+  const tag = (compositionId && tags.find((t) => new RegExp(`\\bid=\\{?\\s*["'\`]${compositionId}["'\`]`).test(t))) || tags[0];
+  if (!tag) return { orientation: "landscape", fps: 30 };
+  const num = (name: string): number | null => {
+    const m = new RegExp(`\\b${name}=\\{?\\s*([0-9.]+)\\s*\\}?`).exec(tag);
+    return m?.[1] ? Number(m[1]) : null;
+  };
+  const w = num("width");
+  const h = num("height");
+  return { orientation: w !== null && h !== null && h > w ? "portrait" : "landscape", fps: num("fps") === 60 ? 60 : 30 };
 }
 
 async function readSources(dir: string): Promise<{ path: string; text: string }[]> {
@@ -150,15 +162,35 @@ export interface RemotionAnalysis {
   blocked: boolean;
   facts: CompositionFacts;
   sourceFiles: number;
+  /** Every `<Composition id>` found, in source order. */
+  compositions: string[];
+  /** Whether the project can be rendered to a video here: needs its own installed dependencies and an entry file. */
+  render: { ready: boolean; reason?: string };
 }
 
-export async function analyzeRemotionProject(sourceDir: string): Promise<RemotionAnalysis> {
+export async function analyzeRemotionProject(sourceDir: string, compositionId?: string): Promise<RemotionAnalysis> {
   const src = await assertImportable(sourceDir);
   const pkg = existsSync(join(src, "package.json")) ? await readFile(join(src, "package.json"), "utf8") : "";
   if (!/"remotion"|@remotion\//.test(pkg)) throw new Error("This folder is not a Remotion project (no remotion dependency in package.json).");
   const files = await readSources(src);
   const findings = lintRemotionSource(files);
-  return { findings, blocked: findings.some((f) => f.severity === "blocker"), facts: readRemotionFacts(files), sourceFiles: files.length };
+  const compositions = readCompositionIds(files);
+  const [cli, entry] = await Promise.all([findRemotionCli(src), findRemotionEntry(src)]);
+  const reason = !cli
+    ? "Remotion is not installed in that folder. Run npm install (or your package manager's install) there first."
+    : !entry
+      ? "No Remotion entry file found (src/index.ts, or the one named in remotion.config.ts)."
+      : compositions.length === 0
+        ? "No <Composition> found in the source."
+        : undefined;
+  return {
+    findings,
+    blocked: findings.some((f) => f.severity === "blocker"),
+    facts: readRemotionFacts(files, compositionId),
+    sourceFiles: files.length,
+    compositions,
+    render: reason ? { ready: false, reason } : { ready: true },
+  };
 }
 
 const REMOTION_LIMITS: CopyLimits = { maxFiles: 3000, maxBytes: 400_000_000 };
@@ -204,4 +236,76 @@ export async function importRemotionProject(sourceDir: string, name?: string, op
     throw err;
   }
   return { project, analysis, prompt: conversionPrompt(analysis) };
+}
+
+export interface RemotionRender {
+  project: ProjectMeta;
+  analysis: RemotionAnalysis;
+  seconds: number;
+  hasAudio: boolean;
+}
+
+const RENDER_TIMEOUT_MS = 30 * 60_000;
+const OUTPUT_TAIL = 2000;
+
+/** Run the project's own Remotion CLI with this process's Node; resolves with the tail of its output on failure. */
+function runRemotion(cli: string, args: string[], cwd: string, signal?: AbortSignal): Promise<void> {
+  const { promise, resolve: done, reject } = Promise.withResolvers<void>();
+  const child = spawn(process.execPath, [cli, ...args], { cwd, env: { ...process.env, FORCE_COLOR: "0", CI: "1" }, stdio: ["ignore", "pipe", "pipe"], signal });
+  let tail = "";
+  for (const stream of [child.stdout, child.stderr]) {
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk: string) => {
+      tail = (tail + chunk).slice(-OUTPUT_TAIL);
+    });
+  }
+  const timer = setTimeout(() => child.kill("SIGKILL"), RENDER_TIMEOUT_MS);
+  child.on("error", (err) => {
+    clearTimeout(timer);
+    reject(err);
+  });
+  child.on("close", (code) => {
+    clearTimeout(timer);
+    if (code === 0) done();
+    else reject(new Error(`Remotion render failed (exit ${code}): ${tail.trim().split(/\r|\n/).filter(Boolean).slice(-8).join("\n")}`));
+  });
+  return promise;
+}
+
+/**
+ * The alternative to translating: render the Remotion composition with the project's own Remotion install and
+ * play the finished mp4 as one clip. Everything Remotion can do survives (state, effects, UI libraries), but the
+ * result is footage, not editable HTML.
+ */
+export async function renderRemotionProject(sourceDir: string, name: string | undefined, opts: { compositionId?: string; signal?: AbortSignal } = {}): Promise<RemotionRender> {
+  const analysis = await analyzeRemotionProject(sourceDir, opts.compositionId);
+  if (!analysis.render.ready) throw new Error(analysis.render.reason);
+  const compositionId = opts.compositionId ?? analysis.compositions[0];
+  // The id goes onto a command line: only an id read from the source is accepted.
+  if (!compositionId || !analysis.compositions.includes(compositionId)) throw new Error(`This project has no composition “${opts.compositionId}”.`);
+  const src = resolve(sourceDir);
+  const [cli, entry] = await Promise.all([findRemotionCli(src), findRemotionEntry(src)]);
+  if (!cli || !entry) throw new Error(analysis.render.reason);
+
+  const project = await createProject({ name: name?.trim() || basename(src), orientation: analysis.facts.orientation, fps: analysis.facts.fps });
+  const root = projectPath(project.id);
+  try {
+    const dir = join(root, "assets", "video");
+    await mkdir(dir, { recursive: true });
+    // Remotion picks the codec from the extension, so the temporary name still ends in .mp4.
+    const tmp = join(dir, ".remotion.tmp.mp4");
+    await runRemotion(cli, ["render", entry, compositionId, tmp, "--codec=h264", "--overwrite"], src, opts.signal);
+    const info = await readMp4Info(tmp);
+    await rename(tmp, join(dir, "remotion.mp4"));
+
+    const indexFile = join(root, "index.html");
+    const mounted = mountRenderedVideo(await readFile(indexFile, "utf8"), { src: "assets/video/remotion.mp4", seconds: info.seconds, hasAudio: info.hasAudio });
+    if (!mounted) throw new Error("index.html has no root composition to place the video in.");
+    await writeFile(`${indexFile}.part`, mounted);
+    await rename(`${indexFile}.part`, indexFile);
+    return { project, analysis, seconds: info.seconds, hasAudio: info.hasAudio };
+  } catch (err) {
+    await rm(root, { recursive: true, force: true });
+    throw err;
+  }
 }

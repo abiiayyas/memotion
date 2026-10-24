@@ -245,12 +245,20 @@ export interface RemotionAnalysis {
   blocked: boolean;
   facts: { orientation: Orientation; fps: 30 | 60 };
   sourceFiles: number;
+  compositions: string[];
+  render: { ready: boolean; reason?: string };
 }
 
 export interface RemotionImport {
   project: Project;
   analysis: RemotionAnalysis;
   prompt: string;
+}
+
+export interface RemotionRender {
+  project: Project;
+  seconds: number;
+  hasAudio: boolean;
 }
 
 export interface AppSettings {

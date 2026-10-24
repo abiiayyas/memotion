@@ -9,13 +9,17 @@ import { assertPublicUrl, isPrivateAddress } from "../src/media/netGuard.js";
 import { generateImage, imageGenerationBlocker, imageSize, sniffImage } from "../src/media/images.js";
 import { fontFamilies } from "../src/media/capture.js";
 import {
+  analyzeRemotionProject,
   conversionPrompt,
   importHyperframesProject,
   importRemotionProject,
   lintRemotionSource,
   readCompositionFacts,
+  readCompositionIds,
   readRemotionFacts,
+  renderRemotionProject,
 } from "../src/projects/import.js";
+import { mountRenderedVideo, readMp4Info } from "../src/projects/remotionRender.js";
 import { createProject, listFiles, listProjects, projectPath, readMeta } from "../src/projects/store.js";
 import { setImageGenerationEnabled, upsertProvider } from "../src/providers/store.js";
 import { parseVariables } from "../src/projects/variables.js";
@@ -344,6 +348,68 @@ export const Root = () => <Composition id="Promo" component={Promo} durationInFr
       mkdirSync(src, { recursive: true });
       writeFileSync(join(src, "package.json"), '{"dependencies":{"react":"18"}}');
       await expect(importRemotionProject(src)).rejects.toThrow(/not a Remotion project/);
+    });
+
+    it("lists compositions and reads the canvas of the one chosen", () => {
+      const two = `<Composition id="Wide" width={1920} height={1080} fps={30} component={A} />
+<Composition id="Tall" component={B} width={1080} height={1920} fps={60} />`;
+      expect(readCompositionIds([{ text: two }, { text: COMP }])).toEqual(["Wide", "Tall", "Promo"]);
+      expect(readRemotionFacts([{ text: two }])).toEqual({ orientation: "landscape", fps: 30 });
+      expect(readRemotionFacts([{ text: two }], "Tall")).toEqual({ orientation: "portrait", fps: 60 });
+    });
+
+    it("will not render a project whose dependencies are not installed, and leaves no project behind", async () => {
+      const src = join(scratch, "remotion-no-install");
+      mkdirSync(join(src, "src"), { recursive: true });
+      writeFileSync(join(src, "package.json"), '{"dependencies":{"remotion":"4.0.0"}}');
+      writeFileSync(join(src, "src", "index.ts"), "registerRoot(Root);");
+      writeFileSync(join(src, "src", "Root.tsx"), COMP);
+      const before = (await listProjects()).length;
+      expect((await analyzeRemotionProject(src)).render).toMatchObject({ ready: false, reason: expect.stringMatching(/not installed/) });
+      await expect(renderRemotionProject(src, "x")).rejects.toThrow(/not installed/);
+      expect((await listProjects()).length).toBe(before);
+    });
+  });
+
+  describe("a rendered Remotion video", () => {
+    const box = (type: string, ...parts: Buffer[]): Buffer => {
+      const body = Buffer.concat(parts);
+      const head = Buffer.alloc(8);
+      head.writeUInt32BE(body.length + 8, 0);
+      head.write(type, 4, "latin1");
+      return Buffer.concat([head, body]);
+    };
+    const u32 = (...n: number[]): Buffer => Buffer.from(n.flatMap((v) => [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]));
+    // version/flags, ctime, mtime, timescale, duration
+    const mvhd = (scale: number, ticks: number) => box("mvhd", u32(0, 0, 0, scale, ticks), Buffer.alloc(80));
+    // version/flags, ctime, mtime, track id, reserved, duration
+    const trak = (handler: string, ticks: number) =>
+      box("trak", box("tkhd", u32(0, 0, 0, 1, 0, ticks), Buffer.alloc(60)), box("mdia", box("hdlr", u32(0, 0), Buffer.from(handler, "latin1"), Buffer.alloc(12))));
+
+    it("takes the picture's length, not the longer audio padding, and notices sound", async () => {
+      const file = join(scratch, "synthetic.mp4");
+      // movie 2.048 s (audio padding), picture 2.0 s
+      writeFileSync(file, Buffer.concat([box("ftyp", Buffer.from("isom0000", "latin1")), box("mdat", Buffer.alloc(16)), box("moov", mvhd(1000, 2048), trak("vide", 2000), trak("soun", 2048))]));
+      expect(await readMp4Info(file)).toEqual({ seconds: 2, hasAudio: true });
+      writeFileSync(file, Buffer.concat([box("ftyp", Buffer.from("isom0000", "latin1")), box("moov", mvhd(1000, 3000), trak("vide", 3000))]));
+      expect(await readMp4Info(file)).toEqual({ seconds: 3, hasAudio: false });
+      writeFileSync(file, box("ftyp", Buffer.from("isom0000", "latin1")));
+      await expect(readMp4Info(file)).rejects.toThrow(/no readable length/);
+    });
+
+    it("mounts as one clip under the root, drops the template title, stretches the project and replaces itself on a second run", () => {
+      const page = `<div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="1920" data-height="1080">
+  <h1 id="title" class="clip" data-start="0" data-duration="10">Title</h1>
+</div>`;
+      const once = mountRenderedVideo(page, { src: "assets/video/remotion.mp4", seconds: 2.001, hasAudio: true })!;
+      expect(once).toContain('data-duration="2.01"');
+      expect(once).toContain('<video id="remotion-render" src="assets/video/remotion.mp4" data-start="0" data-duration="2.01"');
+      expect(once).toContain('data-has-audio="true"');
+      expect(once).not.toContain("Title");
+      const twice = mountRenderedVideo(once, { src: "assets/video/remotion.mp4", seconds: 4, hasAudio: false })!;
+      expect(twice.match(/id="remotion-render"/g)).toHaveLength(1);
+      expect(twice).not.toContain("data-has-audio");
+      expect(mountRenderedVideo("<p>no root</p>", { src: "a.mp4", seconds: 1, hasAudio: false })).toBeNull();
     });
   });
 });

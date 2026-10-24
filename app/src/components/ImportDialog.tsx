@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../api";
 import type { Project, RemotionAnalysis } from "../types";
 import { PathField } from "./PathField";
@@ -12,6 +12,9 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
   const [analysis, setAnalysis] = useState<RemotionAnalysis | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compositionId, setCompositionId] = useState("");
+  const [rendering, setRendering] = useState(false);
+  const abort = useRef<AbortController | null>(null);
 
   const reset = (next: Partial<{ kind: Kind; path: string }>) => {
     if (next.kind) setKind(next.kind);
@@ -48,15 +51,36 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
       onClose();
     });
 
+  const renderVideo = () =>
+    run(async () => {
+      const ctl = new AbortController();
+      abort.current = ctl;
+      setRendering(true);
+      try {
+        const res = await api.renderRemotion(path.trim(), name.trim() || undefined, compositionId || undefined, ctl.signal);
+        onImported(res.project);
+        onClose();
+      } finally {
+        abort.current = null;
+        setRendering(false);
+      }
+    });
+
+  // Closing the dialog during a render stops it; the server removes the half-made project.
+  const close = () => {
+    abort.current?.abort();
+    onClose();
+  };
+
   const blockers = analysis?.findings.filter((f) => f.severity === "blocker") ?? [];
   const others = analysis?.findings.filter((f) => f.severity !== "blocker") ?? [];
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onMouseDown={close}>
       <div className="modal" style={{ width: "min(640px, 94vw)" }} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Import project">
         <div className="modal-head">
           <h2>Import a project</h2>
-          <button onClick={onClose} aria-label="Close">✕</button>
+          <button onClick={close} aria-label="Close">✕</button>
         </div>
         <div className="form">
           <div className="seg" role="radiogroup" aria-label="Project type">
@@ -106,6 +130,27 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
             </div>
           )}
 
+          {analysis && (
+            <div className="notice" style={{ whiteSpace: "normal" }}>
+              <strong>Or keep it exactly as it is.</strong> Memotion renders it with the Remotion installed in your project and plays the result as one video clip. Everything Remotion can do works, including state and UI libraries, but the result is footage: you can trim, move and add to it, not edit its elements.
+              {analysis.compositions.length > 1 && (
+                <label style={{ display: "block", marginTop: 8 }}>
+                  Composition
+                  <select value={compositionId || analysis.compositions[0]} onChange={(e) => setCompositionId(e.target.value)} disabled={busy}>
+                    {analysis.compositions.map((id) => <option key={id} value={id}>{id}</option>)}
+                  </select>
+                </label>
+              )}
+              <div style={{ marginTop: 8 }}>
+                {analysis.render.ready ? (
+                  <button onClick={() => void renderVideo()} disabled={busy}>{rendering ? "Rendering… this can take several minutes" : "Render as video"}</button>
+                ) : (
+                  <span className="muted">{analysis.render.reason}</span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="row">
             {kind === "hyperframes" ? (
               <button className="primary" onClick={() => void importHyperframes()} disabled={busy || !path.trim()}>{busy ? "Importing…" : "Import"}</button>
@@ -114,9 +159,9 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
             ) : blockers.length > 0 ? (
               <button className="danger" onClick={() => void convert(true)} disabled={busy}>Convert anyway, dropping those parts</button>
             ) : (
-              <button className="primary" onClick={() => void convert(false)} disabled={busy}>{busy ? "Importing…" : "Import and convert"}</button>
+              <button className="primary" onClick={() => void convert(false)} disabled={busy}>{busy && !rendering ? "Importing…" : "Import and convert"}</button>
             )}
-            <button onClick={onClose} disabled={busy}>Cancel</button>
+            <button onClick={close} disabled={busy && !rendering}>Cancel</button>
           </div>
         </div>
       </div>

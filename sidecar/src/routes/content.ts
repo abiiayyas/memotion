@@ -21,7 +21,7 @@ import {
 import { getFormat, listFormats } from "../formats/store.js";
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
-import { analyzeRemotionProject, importHyperframesProject, importRemotionProject } from "../projects/import.js";
+import { analyzeRemotionProject, importHyperframesProject, importRemotionProject, renderRemotionProject } from "../projects/import.js";
 import { HYPERFRAMES_VERSION, dataDir } from "../config.js";
 import { checkSystem, downloadChrome } from "../engine/system.js";
 import { ensureGsapCache, GSAP_VERSION, gsapCacheFile, localizeGsap } from "../projects/gsap.js";
@@ -149,6 +149,11 @@ export function registerContentRoutes(app: Hono): void {
   app.post("/projects/import/remotion", async (c) => {
     const body = ImportBody.extend({ force: z.boolean().optional() }).parse(await c.req.json());
     return c.json(await importRemotionProject(body.path, body.name, { force: body.force }));
+  });
+  // Slow (a full Remotion render): the request stays open until the video exists, and closing it stops the render.
+  app.post("/projects/import/remotion/render", async (c) => {
+    const body = ImportBody.extend({ compositionId: z.string().max(120).optional() }).parse(await c.req.json());
+    return c.json(await renderRemotionProject(body.path, body.name, { compositionId: body.compositionId, signal: c.req.raw.signal }));
   });
 
   // ── website capture and generated images ───────────────────

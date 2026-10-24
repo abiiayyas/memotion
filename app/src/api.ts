@@ -35,6 +35,7 @@ import type {
   FileVariables as TemplateVariables,
   Format,
   RemotionAnalysis,
+  RemotionRender,
   RemotionImport,
   TemplateInfo,
   VariableFill,
@@ -89,12 +90,13 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const c = await connect();
   const res = await fetch(`${c.base}${path}`, {
     method,
     headers: { ...auth(c), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) {
@@ -226,6 +228,9 @@ export const api = {
   importHyperframes: (path: string, name?: string) => request<Project>("POST", "/projects/import/hyperframes", { path, name }),
   analyzeRemotion: (path: string) => request<RemotionAnalysis>("POST", "/projects/import/remotion/analyze", { path }),
   importRemotion: (path: string, name: string | undefined, force: boolean) => request<RemotionImport>("POST", "/projects/import/remotion", { path, name, force }),
+  /** Renders the composition to an mp4 and returns a project that plays it. Takes minutes; `signal` stops the render. */
+  renderRemotion: (path: string, name: string | undefined, compositionId: string | undefined, signal: AbortSignal) =>
+    request<RemotionRender>("POST", "/projects/import/remotion/render", { path, name, compositionId }, signal),
 
   capture: (projectId: string, url: string) => request<CaptureResult>("POST", `/projects/${projectId}/capture`, { url }),
   settings: () => request<AppSettings>("GET", "/settings"),
