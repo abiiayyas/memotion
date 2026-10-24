@@ -7,6 +7,7 @@ import { checkProject, readDocs, snapshotProject, DOC_TOPICS } from "../engine/t
 import { listFiles, listMedia, projectPath, readMeta, safeJoin, touch } from "../projects/store.js";
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
+import { getPreferences } from "../preferences.js";
 import { reviewFrames } from "./review.js";
 
 export interface ToolOutcome {
@@ -327,10 +328,12 @@ export async function runTool(
       }
       case "generate_voiceover": {
         const args = TtsArgs.parse(rawArgs);
+        // The Settings switch wins: when the user turned captions off, the model cannot turn them back on.
+        const captionsAllowed = getPreferences().captionsOn;
         const res = await generateSpeechAndCaptions(
           projectId,
           { text: args.text, provider: args.provider ?? "edge", voice: args.voice, rate: 1.0 },
-          args.withCaptions
+          args.withCaptions && captionsAllowed
             ? {
                 style: args.captionStyle,
                 position: "bottom",
@@ -346,7 +349,7 @@ export async function runTool(
           ok: true,
           changed: true,
           summary: `voiceover (${res.duration.toFixed(1)}s, ${res.words.length} words)`,
-          content: `Generated voiceover (${res.duration.toFixed(1)}s, ${res.words.length} words) saved to ${res.audioPath}.${res.captionsFile ? ` Animated captions created at ${res.captionsFile} and mounted in index.html.` : ""}${res.timingEstimated ? " WARNING: word timings are estimated, not measured, so captions will drift from the voice. Tell the user." : ""}`,
+          content: `Generated voiceover (${res.duration.toFixed(1)}s, ${res.words.length} words) saved to ${res.audioPath}.${res.captionsFile ? ` Animated captions created at ${res.captionsFile} and mounted in index.html.` : ""}${!captionsAllowed ? " Captions are turned off in the user's settings, so none were added; do not add your own caption text." : ""}${res.timingEstimated ? " WARNING: word timings are estimated, not measured, so captions will drift from the voice. Tell the user." : ""}`,
         };
       }
       case "transcribe_and_caption": {
