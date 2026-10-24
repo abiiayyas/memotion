@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const ENDINGS = ["move", "meaningful", "come alive", "feel", "from a thought"];
+const ENDINGS = ["move", "meaningful", "come alive", "feel", "from a thought", "great"];
 const HOLD_MS = 2600;
 
 /** "Make something" stays put; only what follows it changes, one ending after another. */
