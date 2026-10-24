@@ -339,6 +339,9 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .prompt-box { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 14px 14px 12px; box-shadow: 0 6px 30px var(--shadow); display: flex; flex-direction: column; gap: 10px; }
 .prompt-box:focus-within { border-color: var(--accent); }
 .prompt-box textarea { border: 0; background: transparent; padding: 4px 6px; font-size: 15px; line-height: 1.5; min-height: 72px; outline: none; }
+.suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.suggest-chip { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: 12.5px; }
+.suggest-chip:hover:not(:disabled) { border-color: var(--accent-line); background: var(--accent-soft); }
 .prompt-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .prompt-chips, .prompt-send { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .prompt-send { margin-left: auto; }
@@ -479,6 +482,9 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .sd-title { font-size: 13px; font-weight: 600; }
 .sd-desc { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .sd-control { display: flex; justify-content: flex-end; align-items: center; max-width: 460px; }
+/* The control sits under the text and takes the full width (a link or path to paste). */
+.sd-row.stack { grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.sd-row.stack .sd-control { max-width: none; justify-content: stretch; }
 .sd-control input[type="password"] { width: 200px; }
 .sd-control select { width: 270px; }
 .sd-control .row { flex-wrap: nowrap; align-items: center; }

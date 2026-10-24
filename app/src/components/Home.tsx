@@ -5,8 +5,10 @@ import { usePrefs } from "../prefs";
 import { api } from "../api";
 import { ago, avatarHue, nameFromPrompt } from "../projectName";
 import type { AgentBackend, AgentsInfo, BrandKit, FileVariables, Format, Orientation, Project, TemplateInfo, VariableFill, VariableValue } from "../types";
+import { placeholders, suggestionLang, suggestionsFor } from "../suggestions";
 import { FillField, TemplateThumb } from "./TemplateFill";
 import { ChipSelect } from "./ChipSelect";
+import { useSkills } from "../skills";
 import { Icon } from "./Icons";
 import { RotatingHeadline } from "./RotatingHeadline";
 
@@ -39,6 +41,7 @@ export interface HomeProps {
 
 export function Home({ projects, hasProvider, backend: appBackend, openSettings, onBackendChanged, onOpen, onShowAll, onStarted }: HomeProps) {
   const [text, setText] = useState("");
+  const [pending, setPending] = useState<string[]>([]);
   const [orientation, setOrientation] = useState<Orientation>("landscape");
   const [fps, setFps] = useState<30 | 60>(30);
   // The defaults from Settings, once they have arrived and whenever they change. A template or format still decides after that.
@@ -59,6 +62,8 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
 
   const [formats, setFormats] = useState<Format[]>([]);
   const [kits, setKits] = useState<BrandKit[]>([]);
+  const skills = useSkills();
+  const [skillId, setSkillId] = useState("");
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
   const [agents, setAgents] = useState<AgentsInfo | null>(null);
   const [tplVars, setTplVars] = useState<FileVariables[]>([]);
@@ -149,6 +154,27 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
     });
   }
 
+  const lang = suggestionLang(prefs?.replyLanguage, navigator.language);
+  const suggestions = useMemo(
+    () => (text.trim() === "" && !busy && !template ? suggestionsFor({ lang, orientation, formatId, hasSkill: skillId !== "", firstMedia: files[0] ? base(files[0]) : undefined }) : []),
+    [text, busy, template, lang, orientation, formatId, skillId, files],
+  );
+
+  /** Put a suggestion in the box and select its first blank, so typing replaces it. */
+  function fillSuggestion(suggestion: string) {
+    const blanks = placeholders(suggestion);
+    setText(suggestion);
+    setPending(blanks);
+    setError(null);
+    const first = blanks[0] ? suggestion.indexOf(blanks[0]) : -1;
+    requestAnimationFrame(() => {
+      area.current?.focus();
+      const [from, to] = first >= 0 ? [first, first + (blanks[0]?.length ?? 0)] : [suggestion.length, suggestion.length];
+      area.current?.setSelectionRange(from, to);
+      setCaret(from);
+    });
+  }
+
   async function changeBackend(value: string) {
     try {
       await api.setAgentBackend(value as AgentBackend);
@@ -164,6 +190,15 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
 
   async function send() {
     if (!canSend) return;
+    // A suggestion's [brackets] are blanks for the user; sending them as they are would give the director nonsense.
+    const blank = pending.find((p) => text.includes(p));
+    if (blank) {
+      setError(lang === "id" ? `Ganti ${blank} dengan isi Anda sendiri sebelum mengirim.` : `Replace ${blank} with your own details before sending.`);
+      const at = text.indexOf(blank);
+      area.current?.focus();
+      area.current?.setSelectionRange(at, at + blank.length);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -183,6 +218,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
       }
       if (formatId) await api.setFormat(project.id, formatId);
       if (kitId) await api.applyBrand(project.id, kitId);
+      if (skillId) await api.setSkill(project.id, skillId);
 
       let prompt = text.trim();
       if (files.length > 0) {
@@ -196,7 +232,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
         if (res.imported.length > 0) prompt += `\n\nMedia I attached: ${res.imported.map((m) => m.path).join(", ")}`;
         if (res.failed.length > 0) prompt += `\n\n(Could not import: ${res.failed.map((f) => `${base(f.path)} (${f.error})`).join("; ")})`;
       }
-      onStarted({ ...project, formatId: formatId || undefined, brandKitId: kitId || undefined }, prompt);
+      onStarted({ ...project, formatId: formatId || undefined, brandKitId: kitId || undefined, skillId: skillId || undefined }, prompt);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -223,6 +259,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
           value={text}
           onChange={(e) => {
             setText(e.target.value);
+            if (e.target.value === "") setPending([]);
             setCaret(e.target.selectionStart);
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
@@ -282,6 +319,12 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
               <option value="">No brand kit</option>
               {kits.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
             </ChipSelect>
+            {skills.length > 0 && (
+              <ChipSelect icon="agent" label="Skill" active={skillId !== ""} value={skillId} onChange={setSkillId} disabled={busy} title="A skill the director reads before designing. Install skills in Settings.">
+                <option value="">No skill</option>
+                {skills.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </ChipSelect>
+            )}
             <ChipSelect icon="template" label="Template" active={templateId !== ""} value={templateId} onChange={setTemplateId} disabled={busy}>
               <option value="">No template</option>
               {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -314,6 +357,17 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
           </div>
         )}
       </form>
+
+      {suggestions.length > 0 && (
+        <div className="suggestions" role="group" aria-label="Ideas for your prompt">
+          <span className="muted">{lang === "id" ? "Bingung mulai dari mana? Coba:" : "Not sure what to write? Try one:"}</span>
+          {suggestions.map((s) => (
+            <button type="button" key={s.label} className="suggest-chip" title={s.text} onClick={() => fillSuggestion(s.text)}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {template && (
         <section className="tpl-card">
