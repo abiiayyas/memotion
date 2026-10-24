@@ -18,6 +18,8 @@ export interface ProjectMeta {
   brandKitId?: string;
   /** Workflow format (a markdown recipe) the director follows for this project. */
   formatId?: string;
+  /** Installed skill (see skills/store.ts) the director reads before designing. */
+  skillId?: string;
 }
 
 export const DIMENSIONS: Record<Orientation, { width: number; height: number }> = {
@@ -57,7 +59,7 @@ export async function writeMeta(id: string, meta: ProjectMeta): Promise<void> {
 }
 
 /** Change optional project settings. `undefined` removes a field. */
-export async function updateMeta(id: string, patch: Partial<Pick<ProjectMeta, "brandKitId" | "formatId" | "name">>): Promise<ProjectMeta> {
+export async function updateMeta(id: string, patch: Partial<Pick<ProjectMeta, "brandKitId" | "formatId" | "skillId" | "name">>): Promise<ProjectMeta> {
   const meta = { ...(await readMeta(id)), ...patch, updatedAt: new Date().toISOString() };
   for (const key of Object.keys(patch) as (keyof typeof patch)[]) if (patch[key] === undefined) delete meta[key];
   await writeMeta(id, meta);

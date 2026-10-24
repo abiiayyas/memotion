@@ -5,15 +5,17 @@ import { AppearanceSection } from "./settings/AppearanceSection";
 import { GeneralSection } from "./settings/GeneralSection";
 import { MediaSection } from "./settings/MediaSection";
 import { RenderingSection } from "./settings/RenderingSection";
+import { SkillsSection } from "./settings/SkillsSection";
 import { ShortcutsSection } from "./settings/ShortcutsSection";
 import { StorageSection } from "./settings/StorageSection";
 
-type SectionId = "general" | "appearance" | "agents" | "media" | "rendering" | "storage" | "shortcuts" | "about";
+type SectionId = "general" | "appearance" | "agents" | "skills" | "media" | "rendering" | "storage" | "shortcuts" | "about";
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "appearance", label: "Appearance" },
   { id: "agents", label: "Agents" },
+  { id: "skills", label: "Skills" },
   { id: "media", label: "Media" },
   { id: "rendering", label: "Rendering" },
   { id: "storage", label: "Storage & Privacy" },
@@ -53,6 +55,7 @@ export function Settings({ onClose, onChanged }: { onClose: () => void; onChange
             {section === "general" && <GeneralSection />}
             {section === "appearance" && <AppearanceSection />}
             {section === "agents" && <AgentsSection onChanged={onChanged} />}
+            {section === "skills" && <SkillsSection />}
             {section === "media" && <MediaSection />}
             {section === "rendering" && <RenderingSection />}
             {section === "storage" && <StorageSection />}

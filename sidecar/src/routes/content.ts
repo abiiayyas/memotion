@@ -19,6 +19,7 @@ import {
   upsertBrandKit,
 } from "../brand/store.js";
 import { getFormat, listFormats } from "../formats/store.js";
+import { getSkill, installSkill, installSkillFromFolder, listSkills, removeSkill } from "../skills/store.js";
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
 import { analyzeRemotionProject, importHyperframesProject, importRemotionProject, renderRemotionProject } from "../projects/import.js";
@@ -109,6 +110,28 @@ export function registerContentRoutes(app: Hono): void {
     const { formatId } = z.object({ formatId: z.string().nullable() }).parse(await c.req.json());
     if (formatId !== null && !(await getFormat(formatId))) return c.json({ ok: false, reason: "Unknown format" }, 400);
     await updateMeta(id, { formatId: formatId ?? undefined });
+    return c.json({ ok: true });
+  });
+
+  // ── skills (installed from a GitHub link) ──────────────────
+  app.get("/skills", async (c) => c.json(await listSkills()));
+  app.post("/skills/install", async (c) => {
+    const { url } = z.object({ url: z.string().trim().min(1).max(500) }).parse(await c.req.json());
+    return c.json(await installSkill(url));
+  });
+  app.post("/skills/import-folder", async (c) => {
+    const { path } = z.object({ path: z.string().trim().min(1).max(1000) }).parse(await c.req.json());
+    return c.json(await installSkillFromFolder(path));
+  });
+  app.delete("/skills/:id", async (c) => {
+    if (!(await removeSkill(c.req.param("id")))) return c.json({ ok: false, reason: "Unknown skill" }, 404);
+    return c.json({ ok: true });
+  });
+  app.put("/projects/:id/skill", async (c) => {
+    const id = c.req.param("id");
+    const { skillId } = z.object({ skillId: z.string().nullable() }).parse(await c.req.json());
+    if (skillId !== null && !(await getSkill(skillId))) return c.json({ ok: false, reason: "Unknown skill" }, 400);
+    await updateMeta(id, { skillId: skillId ?? undefined });
     return c.json({ ok: true });
   });
 

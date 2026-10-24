@@ -16,6 +16,7 @@ const MCP_TOOLS: Record<string, true> = {
   snapshot: true,
   review: true,
   read_docs: true,
+  read_skill: true,
   generate_voiceover: true,
   transcribe_and_caption: true,
   capture_website: true,

@@ -1,5 +1,6 @@
 import { brandBrief, getBrandKit } from "../brand/store.js";
 import { getFormat } from "../formats/store.js";
+import { getSkill } from "../skills/store.js";
 import { getPreferences } from "../preferences.js";
 import type { ProjectMeta } from "../projects/store.js";
 import type { Brief } from "./prompt.js";
@@ -14,6 +15,8 @@ export async function buildBrief(meta: ProjectMeta): Promise<Brief> {
       })
     : undefined;
   const format = meta.formatId ? await getFormat(meta.formatId) : null;
+  // A skill that was removed since is simply not applied, like a format or kit.
+  const skill = meta.skillId ? await getSkill(meta.skillId) : null;
   const language = getPreferences().replyLanguage;
-  return { brand, format, replyLanguage: language === "auto" ? undefined : language };
+  return { brand, format, skill, replyLanguage: language === "auto" ? undefined : language };
 }

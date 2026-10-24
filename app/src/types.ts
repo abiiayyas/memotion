@@ -9,6 +9,20 @@ export interface Project {
   updatedAt: string;
   brandKitId?: string;
   formatId?: string;
+  skillId?: string;
+}
+
+/** A skill installed from a GitHub link; the director reads it before designing. */
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  /** A GitHub link or, for a folder import, the folder's path. */
+  source: string;
+  origin: "github" | "folder";
+  files: string[];
+  bytes: number;
+  installedAt: string;
 }
 
 export interface ProviderCaps {

@@ -3,6 +3,7 @@ import { api } from "../api";
 import type { MarkState } from "../marks";
 import type { Player } from "../player";
 import type { BrandKit, Format, Project } from "../types";
+import { useSkills } from "../skills";
 import { Chat } from "./Chat";
 import { ChipSelect } from "./ChipSelect";
 import { CommentsPanel } from "./Comments";
@@ -49,6 +50,7 @@ function remember(key: string, open: boolean): void {
 function ProjectChips({ project, onProjectChanged, onEdited }: { project: Project; onProjectChanged: () => void; onEdited: () => void }) {
   const [kits, setKits] = useState<BrandKit[]>([]);
   const [formats, setFormats] = useState<Format[]>([]);
+  const skills = useSkills();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,6 +79,12 @@ function ProjectChips({ project, onProjectChanged, onEdited }: { project: Projec
         <option value="">No brand kit</option>
         {kits.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
       </ChipSelect>
+      {skills.length > 0 && (
+        <ChipSelect icon="agent" label="Skill" active={skills.some((s) => s.id === project.skillId)} value={skills.some((s) => s.id === project.skillId) ? (project.skillId ?? "") : ""} onChange={(v) => void change(() => api.setSkill(project.id, v === "" ? null : v))} title="A skill the director reads before designing. Install skills in Settings.">
+          <option value="">No skill</option>
+          {skills.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </ChipSelect>
+      )}
       {error && <span className="draw-error">{error}</span>}
     </div>
   );

@@ -37,6 +37,7 @@ import type {
   RemotionAnalysis,
   RemotionRender,
   RemotionImport,
+  Skill,
   TemplateInfo,
   VariableFill,
 } from "./types";
@@ -218,6 +219,12 @@ export const api = {
 
   formats: () => request<Format[]>("GET", "/formats"),
   setFormat: (projectId: string, formatId: string | null) => request<{ ok: true }>("PUT", `/projects/${projectId}/format`, { formatId }),
+
+  skills: () => request<Skill[]>("GET", "/skills"),
+  installSkill: (url: string) => request<Skill>("POST", "/skills/install", { url }),
+  importSkillFolder: (path: string) => request<Skill>("POST", "/skills/import-folder", { path }),
+  removeSkill: (id: string) => request<{ ok: true }>("DELETE", `/skills/${id}`),
+  setSkill: (projectId: string, skillId: string | null) => request<{ ok: true }>("PUT", `/projects/${projectId}/skill`, { skillId }),
 
   templates: () => request<TemplateInfo[]>("GET", "/templates"),
   deleteTemplate: (id: string) => request<{ ok: true }>("DELETE", `/templates/${id}`),
