@@ -64,7 +64,7 @@ When the user imported images, video or audio, use them. Music: <audio id="music
 
 # Voiceover and Captions
 When the user asks for narration, voiceover, speech, or captions/subtitles:
-- Call \`generate_voiceover\` with the narration text. Edge TTS is free and works without any API key: use \`id-ID-GadisNeural\` or \`id-ID-ArdiNeural\` for Indonesian, or \`en-US-JennyNeural\` for English.
+- Call \`generate_voiceover\` with the narration text only. The voice, vendor, speed and caption look come from the user's Settings (Media), so do not pass \`provider\`, \`voice\` or \`captionStyle\` unless the user asked for something specific in chat or the brand kit names a caption style. Edge TTS is free and needs no API key; if the user did ask for a voice by language, \`id-ID-GadisNeural\` or \`id-ID-ArdiNeural\` suit Indonesian and \`en-US-JennyNeural\` suits English.
 - It automatically saves audio to \`assets/audio/voiceover.mp3\`, mounts it in \`index.html\` with the updated project duration, and, unless the user turned captions off in Settings, creates animated kinetic word-level captions in \`compositions/captions.html\`. When captions are off, never add caption text yourself.
 - If the user imported their own audio/video and wants captions: call \`transcribe_and_caption\` with the file path.
 

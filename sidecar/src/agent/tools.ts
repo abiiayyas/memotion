@@ -8,6 +8,7 @@ import { listFiles, listMedia, projectPath, readMeta, safeJoin, touch } from "..
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
 import { getPreferences } from "../preferences.js";
+import { captionLook, resolveSpeech } from "./speech.js";
 import { reviewFrames } from "./review.js";
 
 export interface ToolOutcome {
@@ -58,16 +59,17 @@ const WriteArgs = z.object({ path: z.string().min(1), content: z.string() });
 const EditArgs = z.object({ path: z.string().min(1), old: z.string().min(1), new: z.string() });
 const SnapshotArgs = z.object({ times: z.array(z.number().min(0)).min(1).max(6) });
 const DocsArgs = z.object({ topic: z.string() });
+const CaptionStyleArg = z.enum(["highlight", "pop", "classic", "clean"]);
 const TtsArgs = z.object({
   text: z.string().min(1),
   provider: z.enum(["edge", "openai", "elevenlabs", "local"]).optional(),
   voice: z.string().optional(),
-  withCaptions: z.boolean().default(true),
-  captionStyle: z.enum(["highlight", "pop", "classic", "clean"]).default("highlight"),
+  withCaptions: z.boolean().optional(),
+  captionStyle: CaptionStyleArg.optional(),
 });
 const TranscribeArgs = z.object({
   mediaPath: z.string().min(1),
-  captionStyle: z.enum(["highlight", "pop", "classic", "clean"]).default("highlight"),
+  captionStyle: CaptionStyleArg.optional(),
 });
 const ReviewArgs = z.object({ times: z.array(z.number().min(0)).max(6).optional(), focus: z.string().max(500).optional() });
 const CaptureArgs = z.object({ url: z.string().min(1).max(2000) });
@@ -178,15 +180,15 @@ export const TOOL_SPECS: ChatCompletionTool[] = [
     function: {
       name: "generate_voiceover",
       description:
-        "Generate speech audio (voiceover) from text script using TTS (Edge TTS free by default, or OpenAI/ElevenLabs). Saves to assets/audio/voiceover.mp3 and automatically builds word-level kinetic animated captions mounted in index.html.",
+        "Generate speech audio (voiceover) from a script. Voice, vendor, speed, caption style and caption position come from the user's Settings: leave those arguments out unless the user asked for something different in chat. Saves to assets/audio/voiceover.mp3 and, when the user has captions on, builds word-level animated captions mounted in index.html.",
       parameters: {
         type: "object",
         properties: {
           text: { type: "string", description: "The narration speech script" },
-          provider: { type: "string", enum: ["edge", "openai", "elevenlabs", "local"], description: "Default is edge (free, online). local = offline Piper voice, only if the user downloaded it in the Voice tab." },
-          voice: { type: "string", description: "Optional voice id (e.g. id-ID-GadisNeural for Indonesian, en-US-JennyNeural for English)" },
-          withCaptions: { type: "boolean", description: "Whether to generate animated captions (default true)" },
-          captionStyle: { type: "string", enum: ["highlight", "pop", "classic", "clean"], description: "Default highlight" },
+          provider: { type: "string", enum: ["edge", "openai", "elevenlabs", "local"], description: "Leave out to use the user's Settings. Set only if the user asks for a different vendor." },
+          voice: { type: "string", description: "Leave out to use the user's Settings. Set only if the user asks for a particular voice (e.g. id-ID-GadisNeural, en-US-JennyNeural)." },
+          withCaptions: { type: "boolean", description: "Only set false to skip captions for this voiceover. It cannot turn on captions the user switched off in Settings." },
+          captionStyle: { type: "string", enum: ["highlight", "pop", "classic", "clean"], description: "Leave out to use the user's Settings. Set only when the brand kit or the user names a style." },
         },
         required: ["text"],
       },
@@ -202,7 +204,7 @@ export const TOOL_SPECS: ChatCompletionTool[] = [
         type: "object",
         properties: {
           mediaPath: { type: "string", description: "Project relative path, e.g. assets/audio/tone.mp3 or assets/video/clip.mp4" },
-          captionStyle: { type: "string", enum: ["highlight", "pop", "classic", "clean"], description: "Default highlight" },
+          captionStyle: { type: "string", enum: ["highlight", "pop", "classic", "clean"], description: "Leave out to use the user's Settings. Set only when the brand kit or the user names a style." },
         },
         required: ["mediaPath"],
       },
@@ -328,41 +330,19 @@ export async function runTool(
       }
       case "generate_voiceover": {
         const args = TtsArgs.parse(rawArgs);
-        // The Settings switch wins: when the user turned captions off, the model cannot turn them back on.
-        const captionsAllowed = getPreferences().captionsOn;
-        const res = await generateSpeechAndCaptions(
-          projectId,
-          { text: args.text, provider: args.provider ?? "edge", voice: args.voice, rate: 1.0 },
-          args.withCaptions && captionsAllowed
-            ? {
-                style: args.captionStyle,
-                position: "bottom",
-                fontSize: 64,
-                fontFamily: "Inter",
-                primaryColor: "#ffffff",
-                accentColor: "#ff9d6b",
-                wordsPerGroup: 3,
-              }
-            : undefined,
-        );
+        const { tts, captions } = resolveSpeech(args, getPreferences(), (await readMeta(projectId)).orientation);
+        const res = await generateSpeechAndCaptions(projectId, tts, captions);
         return {
           ok: true,
           changed: true,
           summary: `voiceover (${res.duration.toFixed(1)}s, ${res.words.length} words)`,
-          content: `Generated voiceover (${res.duration.toFixed(1)}s, ${res.words.length} words) saved to ${res.audioPath}.${res.captionsFile ? ` Animated captions created at ${res.captionsFile} and mounted in index.html.` : ""}${!captionsAllowed ? " Captions are turned off in the user's settings, so none were added; do not add your own caption text." : ""}${res.timingEstimated ? " WARNING: word timings are estimated, not measured, so captions will drift from the voice. Tell the user." : ""}`,
+          content: `Generated voiceover (${res.duration.toFixed(1)}s, ${res.words.length} words) saved to ${res.audioPath}.${res.captionsFile ? ` Animated captions created at ${res.captionsFile} and mounted in index.html.` : ""}${!captions ? " No captions were added (turned off in the user's settings, or by you); do not add your own caption text unless the user asks." : ""}${res.timingEstimated ? " WARNING: word timings are estimated, not measured, so captions will drift from the voice. Tell the user." : ""}`,
         };
       }
       case "transcribe_and_caption": {
         const args = TranscribeArgs.parse(rawArgs);
-        const res = await transcribeAndCaption(projectId, args.mediaPath, {
-          style: args.captionStyle,
-          position: "bottom",
-          fontSize: 64,
-          fontFamily: "Inter",
-          primaryColor: "#ffffff",
-          accentColor: "#ff9d6b",
-          wordsPerGroup: 3,
-        });
+        const look = captionLook(getPreferences(), (await readMeta(projectId)).orientation, args.captionStyle);
+        const res = await transcribeAndCaption(projectId, args.mediaPath, look);
         return {
           ok: true,
           changed: true,
