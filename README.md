@@ -48,6 +48,20 @@ UI without Tauri (no native file dialog or drag-drop): `pnpm dev:sidecar` prints
 pnpm build          # copies Node as a Tauri sidecar, bundles sidecar/ (~125 MB incl. hyperframes), tauri build
 ```
 
+Output (macOS): `app/src-tauri/target/release/bundle/macos/Memotion.app` (about 255 MB) and `bundle/dmg/Memotion_0.1.0_x64.dmg` (about 83 MB). The DMG is built from the `.app` but does not depend on it afterwards. Your data (projects, skills, settings) lives in `~/Library/Application Support/memotion/`, not in the build folders.
+
+**Cleaning up.** Everything below is regenerable; none of it is in git.
+
+| What | Command (from the repo root unless noted) | Frees | Cost of the next build |
+|---|---|---|---|
+| Old app and DMG only | `rm -rf app/src-tauri/target/release/bundle app/src-tauri/target/release/sidecar` | about 1.3 GB | none, `pnpm build` rebuilds them |
+| Sidecar and UI bundles | `rm -rf sidecar/bundle app/dist` | about 125 MB | none |
+| Cargo cache, only this app's code | `cd app/src-tauri && cargo clean -p memotion` | small | seconds longer |
+| Cargo cache, release profile | `cd app/src-tauri && cargo clean --release` | most of `target/release` | minutes (all Tauri dependencies recompile) |
+| Whole Cargo cache | `cd app/src-tauri && cargo clean` (same as `rm -rf app/src-tauri/target`) | 4-5 GB | minutes |
+
+`cargo clean` also removes `bundle/`: copy the `.dmg` somewhere first if you still need it. It does not touch `app/src-tauri/binaries` (the bundled Node, about 114 MB) or `~/.cargo/registry` (downloaded crates). Quit a running Memotion that was opened from `bundle/macos/` before deleting it. An unfinished DMG build can leave a `rw.*.dmg` disk image mounted under `/Volumes`: eject it (`hdiutil detach /Volumes/<name>`) before deleting `bundle/`.
+
 ## Timeline & Audio editing (phases 2 & 3)
 
 The app provides full visual timeline and audio/subtitle generation:
