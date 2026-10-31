@@ -46,7 +46,7 @@ export const CLI_SPECS: Record<CliId, CliSpec> = {
     // Measured: in print mode every file write is denied unless all permission prompts are switched off, and its
     // allow-rules are read only from the user's own settings file, not from the project. So it runs with
     // --dangerously-skip-permissions, and only because the user chose that for this tool.
-    risk: "It cannot write files without turning off all of its permission prompts, so Memotion runs it with every tool auto-approved: it can run shell commands and use your other MCP servers on this computer without asking.",
+    risk: "It cannot write files without turning off all of its permission prompts, so Memotion runs it with every tool auto-approved: it can run shell commands on this computer without asking.",
     install: "See the Antigravity documentation",
     signIn: "agy",
   },

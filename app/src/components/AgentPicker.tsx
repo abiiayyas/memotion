@@ -89,7 +89,7 @@ export function AgentPicker({ onChanged }: { onChanged: () => void }) {
       {error && <div className="notice error">{error}</div>}
       <p className="hint">
         A coding agent works inside the project folder with its own file tools and Memotion's tools (check, snapshots, voice, capture, images). It uses your own
-        subscription or quota for that tool. Your personal hooks, plugins and MCP servers are not loaded, and it gets no shell access except Codex's sandbox (project folder only, no network). Antigravity is the exception to all of that: see its note above.
+        subscription or quota for that tool. Your personal hooks, plugins and MCP servers are not loaded, and it gets no shell access except Codex's sandbox (project folder only, no network). Antigravity is the exception to the shell rule: see its note above.
       </p>
     </section>
   );

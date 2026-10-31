@@ -1,9 +1,9 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AgentEvent } from "../src/agent/loop.js";
-import { claimAgy } from "../src/agents/agyMcp.js";
+import { agyIsolated, claimAgy, prepareAgyHome } from "../src/agents/agyMcp.js";
 import { agyParser, mayChangeFiles, type CliEvent } from "../src/agents/events.js";
 import { buildInvocation, runCliAgent } from "../src/agents/run.js";
 import { createProject } from "../src/projects/store.js";
@@ -57,6 +57,53 @@ describe("how Antigravity is started", () => {
     expect(inv.args.join(" ")).toContain("SYSTEM");
     expect(inv.stdin).toBeUndefined();
   });
+
+  it("runs in the private home it was given, and in the user's own home otherwise", () => {
+    const input = { mcpUrl: "http://127.0.0.1:1/mcp/abc", system: "S", prompt: "p", cwd: "/work/p", isolatedConfigDir: "/tmp/x" };
+    expect(buildInvocation("agy", { ...input, agyHome: "/tmp/home" }).env).toEqual({ HOME: "/tmp/home" });
+    expect(buildInvocation("agy", input).env).toEqual({});
+  });
+});
+
+describe("the private home of an Antigravity run", () => {
+  const root = mkdtempSync(join(tmpdir(), "memotion-agy-home-"));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  it("carries over the sign-in and settings, and none of the user's servers, hooks, plugins or skills", async () => {
+    const real = join(root, "real");
+    const cli = join(real, ".gemini", "antigravity-cli");
+    mkdirSync(cli, { recursive: true });
+    mkdirSync(join(real, ".gemini", "config", "skills"), { recursive: true });
+    mkdirSync(join(real, "Library", "Keychains"), { recursive: true });
+    writeFileSync(join(cli, "settings.json"), '{"model":"M"}');
+    writeFileSync(join(cli, "antigravity-oauth-token"), "tok");
+    writeFileSync(join(cli, "history.jsonl"), "private");
+    writeFileSync(join(real, ".gemini", "config", "mcp_config.json"), '{"mcpServers":{"down":{"serverUrl":"https://example.invalid"}}}');
+    writeFileSync(join(real, ".gemini", "config", "hooks.json"), "{}");
+    writeFileSync(join(real, "Library", "Keychains", "login.keychain-db"), "keys");
+
+    const home = join(root, "run");
+    expect(await prepareAgyHome(home, real)).toBe(home);
+    expect(readFileSync(join(home, ".gemini", "antigravity-cli", "settings.json"), "utf8")).toBe('{"model":"M"}');
+    expect(readFileSync(join(home, ".gemini", "antigravity-cli", "antigravity-oauth-token"), "utf8")).toBe("tok");
+    expect(existsSync(join(home, ".gemini", "antigravity-cli", "history.jsonl"))).toBe(false);
+    expect(existsSync(join(home, ".gemini", "config", "mcp_config.json"))).toBe(false);
+    expect(existsSync(join(home, ".gemini", "config", "hooks.json"))).toBe(false);
+    expect(readFileSync(join(home, "Library", "Keychains", "login.keychain-db"), "utf8")).toBe("keys");
+
+    // A run changes its own copy; and deleting the home afterwards must not reach through the keychain link.
+    writeFileSync(join(home, ".gemini", "antigravity-cli", "settings.json"), '{"model":"changed"}');
+    expect(lstatSync(join(home, "Library", "Keychains")).isSymbolicLink()).toBe(true);
+    rmSync(home, { recursive: true, force: true });
+    expect(readFileSync(join(cli, "settings.json"), "utf8")).toBe('{"model":"M"}');
+    expect(readFileSync(join(real, "Library", "Keychains", "login.keychain-db"), "utf8")).toBe("keys");
+  });
+
+  it("starts without a sign-in or keychain on a computer that has neither", async () => {
+    const home = await prepareAgyHome(join(root, "bare-run"), join(root, "nobody"));
+    expect(existsSync(join(home, "Library"))).toBe(false);
+    expect(existsSync(join(home, ".gemini", "antigravity-cli", "antigravity-oauth-token"))).toBe(false);
+  });
 });
 
 describe("running Antigravity (a stub `agy` keeps a list of MCP servers, as the real one does)", { timeout: 60_000 }, () => {
@@ -75,10 +122,12 @@ case "$1" in
   --version) echo "1.4.5" ;;
   mcp)
     echo "$@" >> "$STUB_OUT/mcp-calls.txt"
+    echo "$HOME" >> "$STUB_OUT/mcp-homes.txt"
     case "$2" in
       list) printf 'NAME  TYPE  STATUS  COMMAND/URL\\nsupabase  http  enabled  https://mcp.supabase.com/mcp\\nmemotion-run-deadbeef0000  http  enabled  http://127.0.0.1:1/mcp/old\\n' ;;
     esac ;;
   *) printf "%s\\n" "$@" > "$STUB_OUT/print-args.txt"
+     echo "$HOME" > "$STUB_OUT/print-home.txt"
 ${printMode}
 esac
 `,
@@ -103,7 +152,26 @@ esac
     rmSync(out, { recursive: true, force: true });
   });
 
-  it("adds Memotion's tools for the run only, clears a server a crash left behind, and never touches the user's own", async () => {
+  it.skipIf(!agyIsolated())("runs in a private home that holds only Memotion's server, and leaves the user's own list and home alone", async () => {
+    rmSync(join(out, "mcp-calls.txt"), { force: true });
+    rmSync(join(out, "mcp-homes.txt"), { force: true });
+    stub(`cat "${fixture}"`);
+    const ev = await collect();
+    expect(ev.filter((e) => e.type === "text")).toEqual([{ type: "text", text: "Done." }]);
+    expect(ev.at(-1)?.type).toBe("done");
+
+    // Only one call touched the list: adding ours, in the same private home the run itself used.
+    const calls = mcpCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/^mcp add --type http memotion-run-[0-9a-f]{12} http:\/\/127\.0\.0\.1:\d+\/mcp\/[0-9a-f]+$/);
+    const home = readFileSync(join(out, "print-home.txt"), "utf8").trim();
+    expect(home).not.toBe(process.env.HOME);
+    expect(readFileSync(join(out, "mcp-homes.txt"), "utf8").trim()).toBe(home);
+    // The private home is gone afterwards.
+    expect(existsSync(home)).toBe(false);
+  });
+
+  it.skipIf(agyIsolated())("adds Memotion's tools for the run only, clears a server a crash left behind, and never touches the user's own", async () => {
     stub(`cat "${fixture}"`);
     const ev = await collect();
     expect(ev.filter((e) => e.type === "text")).toEqual([{ type: "text", text: "Done." }]);
@@ -120,7 +188,7 @@ esac
     expect(calls.indexOf(`mcp remove ${name}`)).toBeGreaterThan(calls.indexOf(added ?? ""));
   });
 
-  it("removes its server and frees the slot even when the run fails", async () => {
+  it.skipIf(agyIsolated())("removes its server and frees the slot even when the run fails", async () => {
     rmSync(join(out, "mcp-calls.txt"), { force: true });
     stub("echo 'quota exceeded' >&2\nexit 4");
     const ev = await collect();
@@ -131,7 +199,7 @@ esac
     slot?.();
   });
 
-  it("allows one Antigravity run at a time, because its list of MCP servers is shared", async () => {
+  it.skipIf(agyIsolated())("allows one Antigravity run at a time, because its list of MCP servers is shared", async () => {
     const slot = claimAgy();
     expect(slot).not.toBeNull();
     const refused = await collect();
