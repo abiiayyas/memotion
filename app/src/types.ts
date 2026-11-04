@@ -165,7 +165,7 @@ export interface VoiceOption {
   name: string;
   locale: string;
   gender?: string;
-  provider: "edge" | "openai" | "elevenlabs" | "local";
+  provider: "edge" | "openai" | "gemini" | "elevenlabs" | "local";
 }
 
 export interface LocalTtsStatus {
@@ -183,7 +183,7 @@ export interface WordTiming {
 
 export interface TtsRequest {
   text: string;
-  provider: "edge" | "openai" | "elevenlabs" | "local";
+  provider: "edge" | "openai" | "gemini" | "elevenlabs" | "local";
   voice?: string;
   rate?: number;
 }
@@ -296,7 +296,7 @@ export interface Preferences {
   exportQuality: Quality;
   exportFps: "project" | "30" | "60";
   whisperModel: "auto" | "base" | "small" | "medium";
-  voiceVendor: "edge" | "local" | "openai" | "elevenlabs";
+  voiceVendor: "edge" | "local" | "openai" | "gemini" | "elevenlabs";
   voiceId: string;
   voiceRate: number;
   captionsOn: boolean;

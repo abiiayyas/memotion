@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectPath, safeJoin } from "../projects/store.js";
 import { getApiKey } from "../providers/store.js";
-import { alignScriptToHeard } from "./align.js";
+import { alignScriptToHeard, estimateByLength } from "./align.js";
 import { applyCaptionsToProject } from "./caption.js";
 import { listEdgeVoices, POPULAR_EDGE_VOICES, synthesizeEdge } from "./edge.js";
 import { DEFAULT_LOCAL_VOICE, LOCAL_VOICES, localVoiceOptions, splitWords, synthesizeLocal, wavToMp3 } from "./localTts.js";
 import { findWhisperBinary, whisperModelPath } from "./whisperSetup.js";
 import { listElevenLabsVoices, synthesizeElevenLabs } from "./elevenlabs.js";
+import { DEFAULT_GEMINI_VOICE, GEMINI_VOICES, isGeminiVoice, synthesizeGemini } from "./gemini.js";
 import { OPENAI_VOICES, synthesizeOpenAi } from "./openai.js";
 import { getPreferences } from "../preferences.js";
 import { preferredModel, transcribeFile, type TranscribeOptions } from "./transcribe.js";
@@ -24,6 +25,7 @@ export * from "./transcribe.js";
 export async function listAllVoices(): Promise<VoiceOption[]> {
   const edge = POPULAR_EDGE_VOICES;
   const openai = OPENAI_VOICES;
+  const gemini = GEMINI_VOICES;
   const elevenKey = getApiKey("elevenlabs") ?? process.env.ELEVENLABS_API_KEY;
   let eleven: VoiceOption[] = [];
   if (elevenKey) {
@@ -33,7 +35,7 @@ export async function listAllVoices(): Promise<VoiceOption[]> {
       // ignore
     }
   }
-  return [...localVoiceOptions(), ...edge, ...openai, ...eleven];
+  return [...localVoiceOptions(), ...edge, ...openai, ...gemini, ...eleven];
 }
 
 export async function generateSpeechAndCaptions(
@@ -54,6 +56,27 @@ export async function generateSpeechAndCaptions(
     duration = res.duration;
     words = res.words;
     timingEstimated = res.timing === "estimated";
+  } else if (req.provider === "gemini") {
+    const key = getApiKey("gemini") ?? process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("A Google Gemini API key is required for Gemini voices. Add it in the Voice tab.");
+    const scratch = join(tmpdir(), `memotion-gemini-tts-${process.pid}-${Date.now()}`);
+    await mkdir(scratch, { recursive: true });
+    try {
+      // The API has no speed setting: speed is applied afterwards, so the voice keeps its pitch.
+      const spoken = await synthesizeGemini(req.text, key, isGeminiVoice(req.voice) ? req.voice : DEFAULT_GEMINI_VOICE);
+      const wav = join(scratch, "speech.wav");
+      const mp3 = join(scratch, "speech.mp3");
+      await writeFile(wav, spoken.wav);
+      await wavToMp3(wav, mp3, req.rate);
+      audioBytes = await readFile(mp3);
+      duration = spoken.duration / req.rate;
+      // No word timings come back. Spread the words over the span where speech was measured; the caller is told it is an estimate.
+      // Inline delivery tags such as <short pause> are not spoken words, so they stay out of the captions.
+      words = estimateByLength(splitWords(req.text.replace(/<[^<>\n]{1,40}>/g, " ")), spoken.speechEnd / req.rate, spoken.speechStart / req.rate);
+      timingEstimated = true;
+    } finally {
+      await rm(scratch, { recursive: true, force: true });
+    }
   } else if (req.provider === "elevenlabs") {
     const key = getApiKey("elevenlabs") ?? process.env.ELEVENLABS_API_KEY;
     if (!key) throw new Error("ElevenLabs API key is required. Add it in the Voice tab.");

@@ -5,12 +5,13 @@ import type { AppSettings, CaptionStyle, LocalTtsStatus, Preferences, VoiceOptio
 import { Row, Seg, Slider, Switch } from "./Rows";
 
 type Vendor = Preferences["voiceVendor"];
-type KeyVendor = "openai" | "elevenlabs";
+type KeyVendor = "openai" | "gemini" | "elevenlabs";
 
 const VENDORS: { value: Vendor; label: string }[] = [
   { value: "edge", label: "Edge (free)" },
   { value: "local", label: "Offline" },
   { value: "openai", label: "OpenAI" },
+  { value: "gemini", label: "Gemini" },
   { value: "elevenlabs", label: "ElevenLabs" },
 ];
 
@@ -32,10 +33,10 @@ const WHISPER: { value: Preferences["whisperModel"]; label: string }[] = [
 export function MediaSection() {
   const { prefs, update } = usePrefs();
   const [voices, setVoices] = useState<VoiceOption[]>([]);
-  const [keys, setKeys] = useState<{ openai: boolean; elevenlabs: boolean }>({ openai: false, elevenlabs: false });
+  const [keys, setKeys] = useState<{ openai: boolean; gemini: boolean; elevenlabs: boolean }>({ openai: false, gemini: false, elevenlabs: false });
   const [local, setLocal] = useState<LocalTtsStatus | null>(null);
   const [app, setApp] = useState<AppSettings | null>(null);
-  const [drafts, setDrafts] = useState<Record<KeyVendor, string>>({ openai: "", elevenlabs: "" });
+  const [drafts, setDrafts] = useState<Record<KeyVendor, string>>({ openai: "", gemini: "", elevenlabs: "" });
   const [installing, setInstalling] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,7 +94,7 @@ export function MediaSection() {
 
   const vendor = prefs?.voiceVendor ?? "edge";
   const vendorVoices = voices.filter((v) => v.provider === vendor);
-  const needsKey = (vendor === "openai" || vendor === "elevenlabs") && !keys[vendor];
+  const needsKey = (vendor === "openai" || vendor === "gemini" || vendor === "elevenlabs") && !keys[vendor];
 
   const keyRow = (v: KeyVendor, title: string, desc: string) => (
     <Row title={title} desc={`${desc} ${keys[v] ? "A key is saved." : "No key yet."}`}>
@@ -110,6 +111,7 @@ export function MediaSection() {
       <div className="sd-block">
         <h3>Voice keys</h3>
         {keyRow("openai", "OpenAI key", "For OpenAI voices, and for cloud speech recognition. The same key serves an OpenAI chat provider; it lives in the system keychain.")}
+        {keyRow("gemini", "Google Gemini key", "For Gemini voices (an AI Studio key, aistudio.google.com/apikey). The same key serves a Google Gemini chat provider; it lives in the system keychain.")}
         {keyRow("elevenlabs", "ElevenLabs key", "For ElevenLabs voices. Kept in the system keychain.")}
       </div>
 

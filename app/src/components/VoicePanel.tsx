@@ -3,13 +3,14 @@ import { ApiError, api } from "../api";
 import { usePrefs } from "../prefs";
 import type { CaptionRequest, CaptionStyle, LocalTtsStatus, Media, Project, TtsRequest, VoiceOption } from "../types";
 
-type Vendor = "edge" | "local" | "openai" | "elevenlabs";
-type KeyVendor = "openai" | "elevenlabs";
+type Vendor = "edge" | "local" | "openai" | "gemini" | "elevenlabs";
+type KeyVendor = "openai" | "gemini" | "elevenlabs";
 
 const VENDOR_LABEL: Record<Vendor, string> = {
   edge: "Edge TTS (free, online, no key)",
   local: "Offline voice (Piper, no internet)",
   openai: "OpenAI TTS",
+  gemini: "Google Gemini TTS",
   elevenlabs: "ElevenLabs",
 };
 
@@ -22,7 +23,7 @@ const STYLE_LABEL: Record<CaptionStyle, string> = {
 
 export function VoicePanel({ project, onEdited }: { project: Project; onEdited: () => void }) {
   const [voices, setVoices] = useState<VoiceOption[]>([]);
-  const [keys, setKeys] = useState<{ openai: boolean; elevenlabs: boolean }>({ openai: false, elevenlabs: false });
+  const [keys, setKeys] = useState<{ openai: boolean; gemini: boolean; elevenlabs: boolean }>({ openai: false, gemini: false, elevenlabs: false });
   const [localTts, setLocalTts] = useState<LocalTtsStatus | null>(null);
   /** Set when the offline voice is not downloaded: the user must agree before anything is downloaded. */
   const [needsLocalConsent, setNeedsLocalConsent] = useState(false);
@@ -101,7 +102,7 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
   }, [refreshVoices, refreshKeys, refreshLocal, refreshMedia]);
 
   const vendorVoices = voices.filter((v) => v.provider === vendor);
-  const keyVendor: KeyVendor | null = vendor === "openai" || vendor === "elevenlabs" ? vendor : null;
+  const keyVendor: KeyVendor | null = vendor === "openai" || vendor === "gemini" || vendor === "elevenlabs" ? vendor : null;
   const vendorNeedsKey = keyVendor !== null && !keys[keyVendor];
   const localUnsupported = vendor === "local" && localTts !== null && !localTts.supported;
 
@@ -122,7 +123,7 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
       await api.saveTtsKey(keyVendor, keyDraft.trim());
       setKeyDraft("");
       await refreshKeys();
-      await refreshVoices(); // ElevenLabs voices appear once the key exists
+      await refreshVoices(); // ElevenLabs voices appear once the key exists (the other services list theirs always)
       setNotice(`${VENDOR_LABEL[vendor]} key saved in the system keychain.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -168,7 +169,7 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
       setNotice(`Voiceover ready (${res.duration.toFixed(1)}s, ${res.words.length} words).${res.captionsFile ? " Captions are on the timeline." : ""}`);
       if (res.timingEstimated) {
         setWarning(
-          vendor === "local"
+          vendor === "local" || vendor === "gemini"
             ? "Word times were estimated from the script (usually within about 0.3 s, drifting later in long scripts). For exact timing, run Transcribe on the voiceover below once local transcription is set up."
             : "OpenAI returned no word timings, so they were estimated from the script. Captions will drift from the voice; try Edge TTS or ElevenLabs for exact timing.",
         );
@@ -224,7 +225,7 @@ export function VoicePanel({ project, onEdited }: { project: Project; onEdited: 
                 {(Object.keys(VENDOR_LABEL) as Vendor[]).map((v) => (
                   <option key={v} value={v}>
                     {VENDOR_LABEL[v]}
-                    {(v === "openai" || v === "elevenlabs") && !keys[v] ? " — needs key" : ""}
+                    {(v === "openai" || v === "gemini" || v === "elevenlabs") && !keys[v] ? " — needs key" : ""}
                     {v === "local" && localTts?.supported && !localTts.engine ? " — download needed" : ""}
                   </option>
                 ))}

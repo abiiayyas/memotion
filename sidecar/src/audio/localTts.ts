@@ -311,8 +311,10 @@ export function findFfmpeg(): string | null {
   }
 }
 
-export async function wavToMp3(wav: string, mp3: string): Promise<void> {
+/** `tempo` speeds the speech up or down (ffmpeg `atempo`, 0.5–2) without changing its pitch. */
+export async function wavToMp3(wav: string, mp3: string, tempo = 1): Promise<void> {
   const ffmpeg = findFfmpeg();
   if (!ffmpeg) throw new Error("ffmpeg is needed to turn the offline voice into an mp3 (it is also needed to render videos). Install it, for example with: brew install ffmpeg");
-  await run(ffmpeg, ["-y", "-loglevel", "error", "-i", wav, "-codec:a", "libmp3lame", "-q:a", "3", mp3], 120_000);
+  const filter = tempo === 1 ? [] : ["-filter:a", `atempo=${tempo}`];
+  await run(ffmpeg, ["-y", "-loglevel", "error", "-i", wav, ...filter, "-codec:a", "libmp3lame", "-q:a", "3", mp3], 120_000);
 }

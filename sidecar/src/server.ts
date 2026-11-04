@@ -335,14 +335,14 @@ export function buildApp(opts: ServerOptions): Hono {
 
   // ── audio, voice & captions ────────────────────────────────
   app.get("/voices", async (c) => c.json({ voices: await listAllVoices() }));
-  // Keys for voice vendors. OpenAI's is the same keychain entry as an OpenAI chat provider, so one key serves both.
-  app.get("/tts-keys", (c) => c.json({ openai: getApiKey("openai") !== null, elevenlabs: getApiKey("elevenlabs") !== null }));
-  app.put("/tts-keys/:vendor{openai|elevenlabs}", async (c) => {
+  // Keys for voice vendors. OpenAI's and Gemini's are the same keychain entries as an OpenAI / Google Gemini chat provider, so one key serves both.
+  app.get("/tts-keys", (c) => c.json({ openai: getApiKey("openai") !== null, gemini: getApiKey("gemini") !== null, elevenlabs: getApiKey("elevenlabs") !== null }));
+  app.put("/tts-keys/:vendor{openai|gemini|elevenlabs}", async (c) => {
     const { apiKey } = z.object({ apiKey: z.string().trim().min(8).max(300) }).parse(await c.req.json());
     setApiKey(c.req.param("vendor"), apiKey);
     return c.json({ ok: true });
   });
-  // Only ElevenLabs can be removed here: removing "openai" would also break an OpenAI chat provider.
+  // Only ElevenLabs can be removed here: removing "openai" or "gemini" would also break a chat provider that shares the key.
   app.delete("/tts-keys/elevenlabs", (c) => {
     deleteApiKey("elevenlabs");
     return c.json({ ok: true });

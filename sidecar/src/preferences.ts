@@ -24,7 +24,7 @@ const Shape = z.object({
   exportFps: z.enum(["project", "30", "60"]),
   /** Speech-to-text model; "auto" is small, with the English-only variant for English. */
   whisperModel: z.enum(["auto", "base", "small", "medium"]),
-  voiceVendor: z.enum(["edge", "local", "openai", "elevenlabs"]),
+  voiceVendor: z.enum(["edge", "local", "openai", "gemini", "elevenlabs"]),
   voiceId: z.string().min(1).max(120),
   voiceRate: z.number().min(0.5).max(2),
   captionsOn: z.boolean(),

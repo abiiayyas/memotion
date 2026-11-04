@@ -64,7 +64,7 @@ const SkillArgs = z.object({ file: z.string().max(300).optional(), offset: z.num
 const CaptionStyleArg = z.enum(["highlight", "pop", "classic", "clean"]);
 const TtsArgs = z.object({
   text: z.string().min(1),
-  provider: z.enum(["edge", "openai", "elevenlabs", "local"]).optional(),
+  provider: z.enum(["edge", "openai", "gemini", "elevenlabs", "local"]).optional(),
   voice: z.string().optional(),
   withCaptions: z.boolean().optional(),
   captionStyle: CaptionStyleArg.optional(),
@@ -202,8 +202,8 @@ export const TOOL_SPECS: ChatCompletionTool[] = [
         type: "object",
         properties: {
           text: { type: "string", description: "The narration speech script" },
-          provider: { type: "string", enum: ["edge", "openai", "elevenlabs", "local"], description: "Leave out to use the user's Settings. Set only if the user asks for a different vendor." },
-          voice: { type: "string", description: "Leave out to use the user's Settings. Set only if the user asks for a particular voice (e.g. id-ID-GadisNeural, en-US-JennyNeural)." },
+          provider: { type: "string", enum: ["edge", "openai", "gemini", "elevenlabs", "local"], description: "Leave out to use the user's Settings. Set only if the user asks for a different vendor." },
+          voice: { type: "string", description: "Leave out to use the user's Settings. Set only if the user asks for a particular voice (e.g. id-ID-GadisNeural, en-US-JennyNeural; for provider gemini a name such as Kore or Puck)." },
           withCaptions: { type: "boolean", description: "Only set false to skip captions for this voiceover. It cannot turn on captions the user switched off in Settings." },
           captionStyle: { type: "string", enum: ["highlight", "pop", "classic", "clean"], description: "Leave out to use the user's Settings. Set only when the brand kit or the user names a style." },
         },

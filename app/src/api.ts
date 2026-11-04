@@ -204,8 +204,8 @@ export const api = {
       { mediaPath, caption, language: opts.language, allowInstall: opts.allowInstall },
     ),
 
-  ttsKeys: () => request<{ openai: boolean; elevenlabs: boolean }>("GET", "/tts-keys"),
-  saveTtsKey: (vendor: "openai" | "elevenlabs", apiKey: string) => request<{ ok: true }>("PUT", `/tts-keys/${vendor}`, { apiKey }),
+  ttsKeys: () => request<{ openai: boolean; gemini: boolean; elevenlabs: boolean }>("GET", "/tts-keys"),
+  saveTtsKey: (vendor: "openai" | "gemini" | "elevenlabs", apiKey: string) => request<{ ok: true }>("PUT", `/tts-keys/${vendor}`, { apiKey }),
   removeElevenLabsKey: () => request<{ ok: true }>("DELETE", "/tts-keys/elevenlabs"),
 
   brandKits: () => request<BrandKit[]>("GET", "/brand-kits"),

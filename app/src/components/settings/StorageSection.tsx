@@ -9,7 +9,7 @@ const LEAVES: [string, string][] = [
   ["AI provider and reviewer", "Your messages, the project files the director reads, and (for a provider that can see) snapshots go to the endpoint you set up, with your key. Nowhere else."],
   ["Coding agent", "What you ask goes to that tool's own service, under your own account with it."],
   ["Edge voices", "The text to speak goes to Microsoft's online speech service. No key, no account."],
-  ["OpenAI / ElevenLabs voices", "The text to speak goes to the vendor you chose, with your key."],
+  ["OpenAI / Gemini / ElevenLabs voices", "The text to speak goes to the vendor you chose, with your key."],
   ["Transcribing", "With an OpenAI key saved, the audio goes to OpenAI. Without one it is transcribed on this computer."],
   ["Website capture", "Memotion opens the address you give it, like a browser would."],
   ["Downloads you ask for", "GSAP from jsDelivr; the render browser from Google's Chrome for Testing; offline voices from GitHub; the speech engine from the npm registry; whisper.cpp and its models from GitHub and Hugging Face. Each one waits for your say-so."],
