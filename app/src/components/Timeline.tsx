@@ -250,7 +250,7 @@ export function Timeline({
   function onKey(e: React.KeyboardEvent) {
     if (e.target instanceof HTMLInputElement) return;
     const mod = e.metaKey || e.ctrlKey;
-    if (busy && e.key !== " ") return;
+    if (busy) return;
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
       void undoRedo(e.shiftKey ? "redo" : "undo");
@@ -264,10 +264,7 @@ export function Timeline({
       void eachOrBatch(selected, "delete");
     } else if (e.key === "s" && !mod) void splitAtPlayhead();
     else if (e.key === "d" && selected.length > 0 && !mod) void eachOrBatch(selected, "duplicate");
-    else if (e.key === " ") {
-      e.preventDefault();
-      player.toggle();
-    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
       e.preventDefault();
       const dir = e.key === "ArrowLeft" ? -1 : 1;
       // With clips selected the arrows nudge them; with none they move the playhead (Shift: by the skip distance).

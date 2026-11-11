@@ -249,14 +249,14 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .preview, .stage, .frame-wrap { position: relative; }
 .mark-layer { position: absolute; inset: 0; touch-action: none; z-index: 2; }
 .draw-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.mark-dock { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 6; max-width: 96%; }
-.mark-toolbar { display: flex; gap: 6px; padding: 8px; background: rgba(28, 28, 30, 0.95); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
-.mark-toolbar .tool { width: 50px; height: 50px; border-radius: 15px; display: grid; place-items: center; background: transparent; border: 0; color: #cfcfd4; padding: 0; }
+.draw-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 6px 14px; background: var(--stage); border-top: 1px solid #ffffff14; }
+.draw-bar input { width: 150px; }
+.mark-toolbar { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; flex: none; }
+.mark-toolbar .tool { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: transparent; border: 0; color: inherit; padding: 0; }
+.mark-toolbar .tool svg { width: 16px; height: 16px; }
 .mark-toolbar .tool:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
 .mark-toolbar .tool.on { background: #1f7a52; color: #fff; }
 .mark-toolbar .tool:disabled { opacity: 0.4; cursor: default; }
-.draw-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 6px 8px; background: rgba(28, 28, 30, 0.95); border: 1px solid var(--line); border-radius: 12px; }
-.draw-bar input { width: 150px; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; padding: 0; }
 .swatch.on { border-color: #fff; }
 .draw-error { color: #ff8a8c; font-size: 11px; max-width: 280px; }
@@ -292,8 +292,8 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .brand-head { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
 .brand-logo { height: 22px; width: auto; flex: none; }
 
-/* Marks sit on the video, which is dark in both themes: keep their own colours dark too. */
-.mark-dock, .pin-wrap {
+/* The draw bar sits on the dark stage; pins sit on the video, which is dark in both themes: keep their own colours dark too. */
+.draw-bar, .pin-wrap {
   --bg: #0e0f12; --panel: #15171c; --panel-2: #1c1f26; --line: #2a2e38; --line-strong: #3a4050; --text: #e8eaee; --muted: #8b92a1; --link: #ff7a3d;
   color: var(--text);
   color-scheme: dark;
@@ -437,9 +437,6 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .project-chips .chip-select select { max-width: 104px; }
 .stage-card button { background: #1c1f26; border-color: #2a2e38; color: #e8eaee; }
 .stage-card button:hover:not(:disabled) { border-color: #3a4050; }
-
-/* The tools sit at the bottom-left of the video (as in HyperFrames) so they cover as little of it as possible. */
-.mark-dock { left: 12px; transform: none; align-items: flex-start; max-width: calc(100% - 24px); }
 
 /* A folded director keeps its chat mounted (a run in progress carries on); only an icon shows. */
 .director.card { position: relative; }

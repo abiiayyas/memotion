@@ -48,7 +48,7 @@ UI without Tauri (no native file dialog or drag-drop): `pnpm dev:sidecar` prints
 pnpm build          # copies Node as a Tauri sidecar, bundles sidecar/ (~125 MB incl. hyperframes), tauri build
 ```
 
-Output (macOS): `app/src-tauri/target/release/bundle/macos/Memotion.app` (about 255 MB) and `bundle/dmg/Memotion_0.1.2_x64.dmg` (about 83 MB). The DMG is built from the `.app` but does not depend on it afterwards. Your data (projects, skills, settings) lives in `~/Library/Application Support/memotion/`, not in the build folders.
+Output (macOS): `app/src-tauri/target/release/bundle/macos/Memotion.app` (about 255 MB) and `bundle/dmg/Memotion_0.1.3_x64.dmg` (about 83 MB). The DMG is built from the `.app` but does not depend on it afterwards. Your data (projects, skills, settings) lives in `~/Library/Application Support/memotion/`, not in the build folders.
 
 **Cleaning up.** Everything below is regenerable; none of it is in git.
 
@@ -145,7 +145,7 @@ Settings → *Agents* lists the agent CLIs found on this computer and lets you p
 
 ## Preview tools: select, draw, comment
 
-The toolbar under the preview has three tools. All of them tell the director *where* to change something; your message says *what*.
+The three tool icons sit in the transport row, next to the play, skip and time controls, so nothing covers the frame (the draw tool's pen options show as a row above it). Space plays or pauses from anywhere in the editor except while typing in a field or with a dialog open. All of them tell the director *where* to change something; your message says *what*.
 
 - **Select**: hover highlights the element under the pointer (with its `#id`), click selects it. It becomes a chip above the message box and goes to the director with its selector, text, source file, position and computed style. Fully transparent elements (e.g. a title before its fade-in) are skipped, because they receive clicks but nobody can see them.
 - **Draw**: five pen colours, undo, clear, an optional note. *Attach to message* asks the page which elements lie under the pen, captures the frame (`hyperframes snapshot`, a few seconds), burns the strokes into it and attaches the PNG. A model that can see images gets the picture; a CLI agent gets its path.

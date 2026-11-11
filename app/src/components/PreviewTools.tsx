@@ -199,38 +199,41 @@ const TOOL_HELP: Record<Tool, string> = {
   comment: "Pin a comment on a spot",
 };
 
-export function MarkToolbar({ marks, draw, disabled }: { marks: MarkState; draw: Draw; disabled: boolean }) {
+/** Pen options while the draw tool is on. Sits in the layout between the stage and the transport, never over the frame. */
+export function DrawBar({ draw }: { draw: Draw }) {
   return (
-    <div className="mark-dock">
-      {marks.tool === "draw" && (
-        <div className="draw-bar">
-          {DRAW_COLORS.map((c) => (
-            <button key={c.id} className={`swatch ${draw.color === c.css ? "on" : ""}`} style={{ background: c.css }} onClick={() => draw.setColor(c.css)} aria-label={`Pen ${c.id}`} title={c.id} />
-          ))}
-          <button onClick={draw.undo} disabled={draw.strokes.length === 0 || draw.busy}>Undo</button>
-          <button onClick={draw.clear} disabled={draw.strokes.length === 0 || draw.busy}>Clear</button>
-          <input value={draw.note} onChange={(e) => draw.setNote(e.target.value)} placeholder="Note (optional)" maxLength={500} disabled={draw.busy} />
-          <button className="primary" onClick={draw.attach} disabled={draw.strokes.length === 0 || draw.busy}>
-            {draw.busy ? "Capturing frame…" : "Attach to message"}
-          </button>
-          {draw.error && <span className="draw-error">{draw.error}</span>}
-        </div>
-      )}
-      <div className="mark-toolbar" role="toolbar" aria-label="Preview tools">
-        {(Object.keys(ICONS) as Tool[]).map((t) => (
-          <button
-            key={t}
-            className={`tool ${marks.tool === t ? "on" : ""}`}
-            onClick={() => marks.setTool(t)}
-            disabled={disabled}
-            aria-pressed={marks.tool === t}
-            aria-label={TOOL_HELP[t]}
-            title={TOOL_HELP[t]}
-          >
-            {ICONS[t]}
-          </button>
-        ))}
-      </div>
+    <div className="draw-bar">
+      {DRAW_COLORS.map((c) => (
+        <button key={c.id} className={`swatch ${draw.color === c.css ? "on" : ""}`} style={{ background: c.css }} onClick={() => draw.setColor(c.css)} aria-label={`Pen ${c.id}`} title={c.id} />
+      ))}
+      <button onClick={draw.undo} disabled={draw.strokes.length === 0 || draw.busy}>Undo</button>
+      <button onClick={draw.clear} disabled={draw.strokes.length === 0 || draw.busy}>Clear</button>
+      <input value={draw.note} onChange={(e) => draw.setNote(e.target.value)} placeholder="Note (optional)" maxLength={500} disabled={draw.busy} />
+      <button className="primary" onClick={draw.attach} disabled={draw.strokes.length === 0 || draw.busy}>
+        {draw.busy ? "Capturing frame…" : "Attach to message"}
+      </button>
+      {draw.error && <span className="draw-error">{draw.error}</span>}
+    </div>
+  );
+}
+
+/** The three mark tools as small icon buttons, meant to sit in the transport row. */
+export function MarkToolbar({ marks, disabled }: { marks: MarkState; disabled: boolean }) {
+  return (
+    <div className="mark-toolbar" role="toolbar" aria-label="Preview tools">
+      {(Object.keys(ICONS) as Tool[]).map((t) => (
+        <button
+          key={t}
+          className={`tool ${marks.tool === t ? "on" : ""}`}
+          onClick={() => marks.setTool(t)}
+          disabled={disabled}
+          aria-pressed={marks.tool === t}
+          aria-label={TOOL_HELP[t]}
+          title={TOOL_HELP[t]}
+        >
+          {ICONS[t]}
+        </button>
+      ))}
     </div>
   );
 }

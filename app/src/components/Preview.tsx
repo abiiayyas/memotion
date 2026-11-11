@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { usePicker, type MarkState } from "../marks";
 import type { Player } from "../player";
-import { MarkLayer, MarkToolbar, useDraw } from "./PreviewTools";
+import { DrawBar, MarkLayer, MarkToolbar, useDraw } from "./PreviewTools";
 import type { Project } from "../types";
 import { usePrefs } from "../prefs";
 
@@ -26,6 +26,29 @@ export function Preview({ project, reloadKey, player, marks }: { project: Projec
   const picker = usePicker(player.frameRef, `${url}#${reloadKey}`);
   const draw = useDraw(project, player, picker, dims, marks);
   const { skip } = usePrefs();
+  // Space plays/pauses from anywhere in the editor, except while typing or in a dialog. The ref keeps one listener for the life of the component.
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  useEffect(() => {
+    const typing = (t: EventTarget | null) =>
+      t instanceof HTMLElement && (t.isContentEditable || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLInputElement && t.type !== "range" && t.type !== "checkbox"));
+    const mine = (e: KeyboardEvent) => (e.code === "Space" || e.key === " ") && !e.metaKey && !e.ctrlKey && !e.altKey && !e.isComposing && !typing(e.target) && !document.querySelector(".modal");
+    const onDown = (e: KeyboardEvent) => {
+      if (!mine(e)) return;
+      e.preventDefault(); // no page scroll, no button "click" from a focused button
+      if (!e.repeat) playerRef.current.toggle();
+    };
+    // A focused button would otherwise click on Space keyup.
+    const onUp = (e: KeyboardEvent) => {
+      if (mine(e)) e.preventDefault();
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, []);
 
   useEffect(() => {
     setUrl(null);
@@ -65,8 +88,8 @@ export function Preview({ project, reloadKey, player, marks }: { project: Projec
         ) : (
           <div className="notice">Starting preview…</div>
         )}
-        <MarkToolbar marks={marks} draw={draw} disabled={!url || !picker.ready} />
       </div>
+      {marks.tool === "draw" && <DrawBar draw={draw} />}
       <div className="transport">
         <button className="skip" onClick={() => player.seek(Math.max(0, player.time - skip))} disabled={!url} aria-label={`Back ${skip} seconds`} title={`Back ${skip} s`}>
           −{skip}s
@@ -77,6 +100,7 @@ export function Preview({ project, reloadKey, player, marks }: { project: Projec
         <button className="skip" onClick={() => player.seek(Math.min(player.duration, player.time + skip))} disabled={!url} aria-label={`Forward ${skip} seconds`} title={`Forward ${skip} s`}>
           +{skip}s
         </button>
+        <MarkToolbar marks={marks} disabled={!url || !picker.ready} />
         <input
           type="range"
           min={0}
