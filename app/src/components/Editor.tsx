@@ -6,6 +6,7 @@ import type { BrandKit, Format, Project } from "../types";
 import { useSkills } from "../skills";
 import { Chat } from "./Chat";
 import { ChipSelect } from "./ChipSelect";
+import { LookPicker } from "./LookPicker";
 import { CommentsPanel } from "./Comments";
 import { ExportPanel } from "./Export";
 import { Icon, type IconName } from "./Icons";
@@ -79,6 +80,7 @@ function ProjectChips({ project, onProjectChanged, onEdited }: { project: Projec
         <option value="">No brand kit</option>
         {kits.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
       </ChipSelect>
+      <LookPicker picks={project.picks ?? {}} onChange={(next) => void change(() => api.setPicks(project.id, next))} />
       {skills.length > 0 && (
         <ChipSelect icon="agent" label="Skill" active={skills.some((s) => s.id === project.skillId)} value={skills.some((s) => s.id === project.skillId) ? (project.skillId ?? "") : ""} onChange={(v) => void change(() => api.setSkill(project.id, v === "" ? null : v))} title="A skill the director reads before designing. Install skills in Settings.">
           <option value="">No skill</option>

@@ -4,10 +4,11 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { usePrefs } from "../prefs";
 import { api } from "../api";
 import { ago, avatarHue, nameFromPrompt } from "../projectName";
-import type { AgentBackend, AgentsInfo, BrandKit, FileVariables, Format, Orientation, Project, TemplateInfo, VariableFill, VariableValue } from "../types";
+import type { AgentBackend, AgentsInfo, BrandKit, FileVariables, Format, Orientation, Picks, Project, TemplateInfo, VariableFill, VariableValue } from "../types";
 import { placeholders, suggestionLang, suggestionsFor } from "../suggestions";
 import { FillField, TemplateThumb } from "./TemplateFill";
 import { ChipSelect } from "./ChipSelect";
+import { LookPicker } from "./LookPicker";
 import { useSkills } from "../skills";
 import { Icon } from "./Icons";
 import { RotatingHeadline } from "./RotatingHeadline";
@@ -53,6 +54,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
     if (defaultFps) setFps(defaultFps);
   }, [defaultShape, defaultFps]);
   const [formatId, setFormatId] = useState("");
+  const [picks, setPicks] = useState<Picks>({});
   const [kitId, setKitId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [files, setFiles] = useState<string[]>([]);
@@ -217,6 +219,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
         project = await api.createProject(title, orientation, fps);
       }
       if (formatId) await api.setFormat(project.id, formatId);
+      if (Object.keys(picks).length > 0) await api.setPicks(project.id, picks);
       if (kitId) await api.applyBrand(project.id, kitId);
       if (skillId) await api.setSkill(project.id, skillId);
 
@@ -232,7 +235,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
         if (res.imported.length > 0) prompt += `\n\nMedia I attached: ${res.imported.map((m) => m.path).join(", ")}`;
         if (res.failed.length > 0) prompt += `\n\n(Could not import: ${res.failed.map((f) => `${base(f.path)} (${f.error})`).join("; ")})`;
       }
-      onStarted({ ...project, formatId: formatId || undefined, brandKitId: kitId || undefined, skillId: skillId || undefined }, prompt);
+      onStarted({ ...project, formatId: formatId || undefined, brandKitId: kitId || undefined, skillId: skillId || undefined, picks: Object.keys(picks).length > 0 ? picks : undefined }, prompt);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -315,6 +318,7 @@ export function Home({ projects, hasProvider, backend: appBackend, openSettings,
               <option value="">Free-form</option>
               {formats.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </ChipSelect>
+            <LookPicker picks={picks} onChange={setPicks} disabled={busy} />
             <ChipSelect icon="brand" label="Brand kit" active={kitId !== ""} value={kitId} onChange={setKitId} disabled={busy}>
               <option value="">No brand kit</option>
               {kits.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}

@@ -4,6 +4,7 @@ import { basename, extname, join, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import { projectsDir } from "../config.js";
 import { runCli } from "../engine/cli.js";
+import type { Picks } from "../catalog/shelves.js";
 
 export type Orientation = "landscape" | "portrait";
 
@@ -20,6 +21,8 @@ export interface ProjectMeta {
   formatId?: string;
   /** Installed skill (see skills/store.ts) the director reads before designing. */
   skillId?: string;
+  /** The look and feel chosen per shelf (see catalog/store.ts); the director chooses where a shelf is empty. */
+  picks?: Picks;
 }
 
 export const DIMENSIONS: Record<Orientation, { width: number; height: number }> = {
@@ -59,7 +62,7 @@ export async function writeMeta(id: string, meta: ProjectMeta): Promise<void> {
 }
 
 /** Change optional project settings. `undefined` removes a field. */
-export async function updateMeta(id: string, patch: Partial<Pick<ProjectMeta, "brandKitId" | "formatId" | "skillId" | "name">>): Promise<ProjectMeta> {
+export async function updateMeta(id: string, patch: Partial<Pick<ProjectMeta, "brandKitId" | "formatId" | "skillId" | "picks" | "name">>): Promise<ProjectMeta> {
   const meta = { ...(await readMeta(id)), ...patch, updatedAt: new Date().toISOString() };
   for (const key of Object.keys(patch) as (keyof typeof patch)[]) if (patch[key] === undefined) delete meta[key];
   await writeMeta(id, meta);

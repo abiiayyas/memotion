@@ -34,6 +34,8 @@ import type {
   CaptureResult,
   FileVariables as TemplateVariables,
   Format,
+  Picks,
+  ShelfInfo,
   RemotionAnalysis,
   RemotionRender,
   RemotionImport,
@@ -219,6 +221,8 @@ export const api = {
 
   formats: () => request<Format[]>("GET", "/formats"),
   setFormat: (projectId: string, formatId: string | null) => request<{ ok: true }>("PUT", `/projects/${projectId}/format`, { formatId }),
+  catalog: () => request<ShelfInfo[]>("GET", "/catalog"),
+  setPicks: (projectId: string, picks: Picks) => request<{ ok: true }>("PUT", `/projects/${projectId}/picks`, picks),
 
   skills: () => request<Skill[]>("GET", "/skills"),
   installSkill: (url: string) => request<Skill>("POST", "/skills/install", { url }),

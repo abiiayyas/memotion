@@ -7,6 +7,7 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { runAgent, loadHistory, clearHistory, isAgentRunning } from "./agent/loop.js";
+import { keepAlive } from "./sse.js";
 import { CLI_SPECS, detectClis } from "./agents/cli.js";
 import { localizeGsap } from "./projects/gsap.js";
 import { registerMcpRoutes } from "./agents/mcp.js";
@@ -293,6 +294,7 @@ export function buildApp(opts: ServerOptions): Hono {
     chatAborts.set(id, abort);
     return streamSSE(c, async (stream) => {
       stream.onAbort(() => abort.abort());
+      const stopKeepAlive = keepAlive(stream);
       try {
         const backend = getAgentBackend();
         const events = backend === "api" ? runAgent(id, message, abort.signal, rendered.images) : runCliAgent(id, message, abort.signal, backend);
@@ -300,6 +302,7 @@ export function buildApp(opts: ServerOptions): Hono {
           await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
         }
       } finally {
+        stopKeepAlive();
         chatAborts.delete(id);
       }
     });

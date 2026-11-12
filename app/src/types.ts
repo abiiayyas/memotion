@@ -1,5 +1,14 @@
 export type Orientation = "landscape" | "portrait";
 
+/** One item per shelf (visual style, hook, ...); a shelf without an entry is the director's choice. */
+export type Picks = Record<string, string>;
+
+export interface ShelfInfo {
+  shelf: string;
+  label: string;
+  items: { id: string; name: string; description: string; builtIn: boolean }[];
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -10,6 +19,7 @@ export interface Project {
   brandKitId?: string;
   formatId?: string;
   skillId?: string;
+  picks?: Picks;
 }
 
 /** A skill installed from a GitHub link; the director reads it before designing. */

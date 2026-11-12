@@ -349,6 +349,11 @@ code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size:
 .pill:hover:not(:disabled), .chip-select:hover { border-color: var(--line-strong); color: var(--text); }
 .chip-select { position: relative; padding-right: 8px; }
 .chip-select.active { color: var(--text); border-color: var(--accent-line); background: var(--accent-soft); }
+.pill.pill-active { color: var(--text); border-color: var(--accent-line); background: var(--accent-soft); }
+.look-pop { flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 12px; padding: 10px 0 2px; border-top: 1px solid var(--line); }
+.look-pop small { grid-column: 1 / -1; }
+.look-row { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.look-row select { width: 100%; font-size: 12.5px; }
 .chip-select select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; padding: 0 2px; width: auto; max-width: 130px; font-size: 12.5px; color: inherit; cursor: pointer; text-overflow: ellipsis; }
 .chip-select select:focus-visible { outline: none; }
 .chip-select:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }

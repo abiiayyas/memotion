@@ -19,6 +19,7 @@ import {
   upsertBrandKit,
 } from "../brand/store.js";
 import { getFormat, listFormats } from "../formats/store.js";
+import { listCatalog, parsePicks } from "../catalog/store.js";
 import { getSkill, installSkill, installSkillFromFolder, listSkills, removeSkill } from "../skills/store.js";
 import { captureWebsite } from "../media/capture.js";
 import { generateImage, imageGenerationBlocker } from "../media/images.js";
@@ -110,6 +111,16 @@ export function registerContentRoutes(app: Hono): void {
     const { formatId } = z.object({ formatId: z.string().nullable() }).parse(await c.req.json());
     if (formatId !== null && !(await getFormat(formatId))) return c.json({ ok: false, reason: "Unknown format" }, 400);
     await updateMeta(id, { formatId: formatId ?? undefined });
+    return c.json({ ok: true });
+  });
+
+  // ── catalog (the picks per shelf) ──────────────────────────
+  app.get("/catalog", async (c) => c.json(await listCatalog()));
+  app.put("/projects/:id/picks", async (c) => {
+    const id = c.req.param("id");
+    const parsed = await parsePicks(z.record(z.string(), z.string()).parse(await c.req.json()));
+    if (!parsed.ok) return c.json({ ok: false, reason: parsed.reason }, 400);
+    await updateMeta(id, { picks: Object.keys(parsed.picks).length > 0 ? parsed.picks : undefined });
     return c.json({ ok: true });
   });
 

@@ -97,6 +97,28 @@ describe("formats over HTTP", () => {
   }, 60_000);
 });
 
+describe("catalog picks over HTTP", () => {
+  it("lists the shelves, saves picks, refuses an unknown shelf or item, and clears them", async () => {
+    const shelves: { shelf: string; items: { id: string; body?: string }[] }[] = await (await call("GET", "/catalog")).json();
+    expect(shelves.map((s) => s.shelf)).toEqual(["visual", "edit", "hook", "framework", "structure", "preset", "effects", "captions"]);
+    expect(shelves.find((s) => s.shelf === "hook")?.items.map((i) => i.id)).toContain("fake-ui");
+    expect(shelves.flatMap((s) => s.items).every((i) => i.body === undefined)).toBe(true);
+
+    const { id } = await createProject({ name: "Picks route", orientation: "portrait" });
+    const picksOf = async () => {
+      const project: { picks?: Record<string, string> } = await (await call("GET", `/projects/${id}`)).json();
+      return project.picks;
+    };
+    expect((await call("PUT", `/projects/${id}/picks`, { hook: "fake-ui", visual: "comic-ink" })).status).toBe(200);
+    expect(await picksOf()).toEqual({ hook: "fake-ui", visual: "comic-ink" });
+    expect((await call("PUT", `/projects/${id}/picks`, { hook: "nope" })).status).toBe(400);
+    expect((await call("PUT", `/projects/${id}/picks`, { nonsense: "x" })).status).toBe(400);
+    expect(await picksOf()).toEqual({ hook: "fake-ui", visual: "comic-ink" });
+    expect((await call("PUT", `/projects/${id}/picks`, {})).status).toBe(200);
+    expect(await picksOf()).toBeUndefined();
+  }, 60_000);
+});
+
 describe("cost and network gates", () => {
   it("keeps image generation off by default and explains why it cannot run", async () => {
     const s = (await (await call("GET", "/settings")).json()) as { imageGeneration: boolean; imageBlocker: string | null };
