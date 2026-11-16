@@ -190,7 +190,7 @@ export const api = {
   deleteComment: (id: string, commentId: string) => request<{ ok: true }>("DELETE", `/projects/${id}/comments/${commentId}`),
   agents: () => request<AgentsInfo>("GET", "/agents"),
   agentBackend: () => request<{ backend: AgentBackend }>("GET", "/agents/backend"),
-  setAgentBackend: (backend: AgentBackend, acceptRisk = false) => request<{ backend: AgentBackend }>("PUT", "/agents/backend", { backend, acceptRisk }),
+  setAgentBackend: (backend: AgentBackend) => request<{ backend: AgentBackend }>("PUT", "/agents/backend", { backend }),
   localTts: () => request<LocalTtsStatus>("GET", "/tts-local"),
   installLocalTts: (voice: string) => request<LocalTtsStatus & { ok: true }>("POST", "/tts-local/install", { voice }),
   generateSpeech: (projectId: string, tts: TtsRequest, caption?: CaptionRequest) =>

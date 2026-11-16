@@ -335,18 +335,16 @@ export interface AboutInfo {
   gsapCached: boolean;
 }
 
-export type AgentBackend = "api" | "claude" | "codex" | "opencode" | "agy";
+export type AgentBackend = "api" | "claude" | "codex" | "opencode";
 
 export interface CliInfo {
-  id: "claude" | "codex" | "opencode" | "agy";
+  id: "claude" | "codex" | "opencode";
   label: string;
   vendor: string;
   found: boolean;
   path?: string;
   version?: string;
   signedIn: boolean | null;
-  /** Set when choosing it gives up a safeguard; the user must confirm. */
-  risk?: string;
   install: string;
   signInCommand: string;
 }

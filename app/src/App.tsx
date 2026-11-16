@@ -17,7 +17,6 @@ const AGENT_LABEL: Record<AgentBackend, string> = {
   claude: "Claude Code",
   codex: "Codex",
   opencode: "OpenCode",
-  agy: "Antigravity",
 };
 
 const SIDEBAR_KEY = "memotion.sidebar";

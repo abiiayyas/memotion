@@ -271,13 +271,11 @@ export function buildApp(opts: ServerOptions): Hono {
   app.get("/agents", async (c) => c.json({ backend: getAgentBackend(), clis: await detectClis() }));
   app.get("/agents/backend", (c) => c.json({ backend: getAgentBackend() }));
   app.put("/agents/backend", async (c) => {
-    const { backend, acceptRisk } = z.object({ backend: z.string().refine(isAgentBackend, "Unknown agent"), acceptRisk: z.boolean().optional() }).parse(await c.req.json());
+    const { backend } = z.object({ backend: z.string().refine(isAgentBackend, "Unknown agent") }).parse(await c.req.json());
     if (!isAgentBackend(backend)) return c.json({ error: "Unknown agent" }, 400);
     if (backend !== "api") {
       const cli = (await detectClis()).find((x) => x.id === backend);
       if (!cli?.found) return c.json({ error: `${CLI_SPECS[backend].label} was not found on this computer.` }, 400);
-      // A tool that needs a safeguard turned off is only chosen when the user said yes to exactly that.
-      if (CLI_SPECS[backend].risk && acceptRisk !== true) return c.json({ error: `${CLI_SPECS[backend].label} needs your confirmation first: ${CLI_SPECS[backend].risk}`, code: "risk_not_accepted" }, 409);
     }
     setAgentBackend(backend);
     return c.json({ backend });

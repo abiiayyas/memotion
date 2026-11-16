@@ -5,14 +5,12 @@ import { delimiter, join } from "node:path";
 import { z } from "zod";
 
 /** Command-line coding agents Memotion knows how to start. */
-export type CliId = "claude" | "codex" | "opencode" | "agy";
+export type CliId = "claude" | "codex" | "opencode";
 
 interface CliSpec {
   label: string;
   vendor: string;
   binary: string;
-  /** Set when using it means giving up a safeguard: what the user gives up. Choosing it needs an explicit yes. */
-  risk?: string;
   install: string;
   signIn: string;
 }
@@ -39,20 +37,9 @@ export const CLI_SPECS: Record<CliId, CliSpec> = {
     install: "curl -fsSL https://opencode.ai/install | bash",
     signIn: "opencode auth login",
   },
-  agy: {
-    label: "Antigravity",
-    vendor: "Google",
-    binary: "agy",
-    // Measured: in print mode every file write is denied unless all permission prompts are switched off, and its
-    // allow-rules are read only from the user's own settings file, not from the project. So it runs with
-    // --dangerously-skip-permissions, and only because the user chose that for this tool.
-    risk: "It cannot write files without turning off all of its permission prompts, so Memotion runs it with every tool auto-approved: it can run shell commands on this computer without asking.",
-    install: "See the Antigravity documentation",
-    signIn: "agy",
-  },
 };
 
-export const CLI_IDS: CliId[] = ["claude", "codex", "opencode", "agy"];
+export const CLI_IDS: CliId[] = ["claude", "codex", "opencode"];
 
 export function isCliId(v: string): v is CliId {
   return v in CLI_SPECS;
@@ -67,8 +54,6 @@ export interface CliInfo {
   version?: string;
   /** True: signed in. False: found but not signed in. null: not checked for this tool. */
   signedIn: boolean | null;
-  /** Present when choosing it gives up a safeguard. See `CliSpec.risk`. */
-  risk?: string;
   install: string;
   signInCommand: string;
 }
@@ -194,7 +179,6 @@ async function detectOne(id: CliId, env: NodeJS.ProcessEnv): Promise<CliInfo> {
     vendor: spec.vendor,
     found: false,
     signedIn: null,
-    risk: spec.risk,
     install: spec.install,
     signInCommand: spec.signIn,
   };

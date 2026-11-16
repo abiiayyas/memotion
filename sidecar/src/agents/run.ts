@@ -12,7 +12,6 @@ import { selfPort } from "../config.js";
 import { getReviewerProvider } from "../providers/store.js";
 import { previewEtag, waitPreviewChanged } from "../engine/preview.js";
 import { listMedia, projectPath, readMeta } from "../projects/store.js";
-import { addAgyServer, agyIsolated, agyServerName, claimAgy, prepareAgyHome, removeAgyServer, removeStaleServers } from "./agyMcp.js";
 import { childEnv, CLI_SPECS, findOnPath, type CliId } from "./cli.js";
 import { claudeToolLabel, mayChangeFiles, parserFor } from "./events.js";
 import { openRunScope } from "./mcp.js";
@@ -29,8 +28,6 @@ export interface InvocationInput {
   mcpUrl: string;
   /** An empty folder to use as a config home, for CLIs that keep user settings there. */
   isolatedConfigDir: string;
-  /** Antigravity only: the private home folder this run uses (see agyMcp.ts). Without it the user's own is used. */
-  agyHome?: string;
   system: string;
   prompt: string;
   cwd: string;
@@ -94,15 +91,6 @@ export function buildInvocation(id: CliId, input: InvocationInput): Invocation {
       ],
       stdin: prompt,
       env: {},
-    };
-  }
-  if (id === "agy") {
-    return {
-      // Every tool is auto-approved: the only way it writes files in print mode. The user chose this in Settings.
-      // --sandbox asks it to restrict the terminal; in testing it retried a refused command and got through, so
-      // treat it as a hint, not a wall. Memotion's tools are added to its server list by the caller (agyMcp.ts).
-      args: ["--print", prompt, "--dangerously-skip-permissions", "--sandbox", "--output-format", "stream-json"],
-      env: input.agyHome ? { HOME: input.agyHome } : {},
     };
   }
   return {
@@ -195,18 +183,6 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
       return;
     }
 
-    // Without a private home (see agyMcp.ts) Antigravity has one list of MCP servers for the whole account:
-    // one run at a time, and ours is added for the run only.
-    const sharedAgy = id === "agy" && !agyIsolated();
-    if (sharedAgy) {
-      const agySlot = claimAgy();
-      if (!agySlot) {
-        yield { type: "error", message: "Antigravity is already working on another project. It can only do one at a time." };
-        return;
-      }
-      cleanup.push(async () => agySlot());
-    }
-
     const meta = await readMeta(projectId);
     const media = (await listMedia(projectId)).map((m) => `${m.path} (${m.kind})`);
     const brief = await buildBrief(meta);
@@ -217,14 +193,7 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
     cleanup.push(() => rm(isolatedConfigDir, { recursive: true, force: true }));
     const prompt = withRecentConversation(await loadHistory(projectId), userText);
     const mcpUrl = `http://127.0.0.1:${selfPort()}${scope.path}`;
-    const agyHome = id === "agy" && !sharedAgy ? await prepareAgyHome(isolatedConfigDir) : undefined;
-    if (id === "agy") {
-      const name = agyServerName(scope.token);
-      if (sharedAgy) await removeStaleServers(binary);
-      await addAgyServer(binary, name, mcpUrl, agyHome);
-      if (sharedAgy) cleanup.push(() => removeAgyServer(binary, name));
-    }
-    const inv = buildInvocation(id, { isolatedConfigDir, agyHome, mcpUrl, system, prompt, cwd });
+    const inv = buildInvocation(id, { isolatedConfigDir, mcpUrl, system, prompt, cwd });
 
     const child = spawn(binary, inv.args, { cwd, env: await childEnv(inv.env), stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32" });
     if (child.pid !== undefined) active[child.pid] = child;
@@ -261,7 +230,7 @@ export async function* runCliAgent(projectId: string, userText: string, signal: 
           finalText += (finalText ? "\n\n" : "") + ev.text;
           yield { type: "text", text: ev.text };
         } else if (ev.type === "tool-start") {
-          const label = id === "claude" || id === "agy" ? claudeToolLabel(ev.name, ev.args) : ev.name;
+          const label = id === "claude" ? claudeToolLabel(ev.name, ev.args) : ev.name;
           names[ev.id] = ev.name;
           yield { type: "tool-start", id: ev.id, name: label, args: ev.args };
         } else if (ev.type === "tool-result") {
