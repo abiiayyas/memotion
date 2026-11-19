@@ -1,11 +1,32 @@
-node_modules
-dist
-target
+# Node & build outputs
+node_modules/
+dist/
+sidecar/bundle/
+
+# Tauri & Rust
+target/
+app/src-tauri/target/
+app/src-tauri/gen/
+app/src-tauri/binaries/
+
+# Runtime & project artifacts
+.hyperframes/
+.memotion/
+renders/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE, editors & logs
+.vscode/
+.idea/
+*.swp
+*.swo
 *.log
-app/src-tauri/gen
-app/src-tauri/binaries
-sidecar/bundle
-.hyperframes
-.memotion
-renders
+
+# Local AI, design harness & raw screenshots
+.impeccable/
+.commandcode/
+AGENTS.md
+screenshoots/

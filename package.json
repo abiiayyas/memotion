@@ -9,6 +9,8 @@
     "dev:sidecar": "pnpm --filter sidecar dev",
     "dev:web": "pnpm --filter app dev",
     "build": "pnpm --filter app build:release",
+    "build:mac": "pnpm --filter app build:mac",
+    "build:win": "pnpm --filter app build:win",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
   }

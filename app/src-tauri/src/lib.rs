@@ -31,6 +31,20 @@ fn sidecar_info(state: State<Sidecar>) -> Option<SidecarInfo> {
     state.info.lock().expect("sidecar info lock").clone()
 }
 
+#[cfg(not(debug_assertions))]
+fn normalize_resource_path(path: std::path::PathBuf) -> std::path::PathBuf {
+    #[cfg(windows)]
+    if let Some(s) = path.to_str() {
+        if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+            return std::path::PathBuf::from(format!(r"\\{rest}"));
+        }
+        if let Some(rest) = s.strip_prefix(r"\\?\") {
+            return std::path::PathBuf::from(rest);
+        }
+    }
+    path
+}
+
 fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
     let shell = app.shell();
 
@@ -47,10 +61,11 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
     #[cfg(not(debug_assertions))]
     let command = {
         use tauri::path::BaseDirectory;
-        let entry = app
-            .path()
-            .resolve("sidecar/dist/index.js", BaseDirectory::Resource)
-            .map_err(|e| format!("sidecar resource not found: {e}"))?;
+        let entry = normalize_resource_path(
+            app.path()
+                .resolve("sidecar/dist/index.js", BaseDirectory::Resource)
+                .map_err(|e| format!("sidecar resource not found: {e}"))?,
+        );
         shell
             .sidecar("node")
             .map_err(|e| format!("bundled node not found: {e}"))?

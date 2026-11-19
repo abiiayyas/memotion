@@ -42,8 +42,10 @@ writeFileSync(
   ),
 );
 
-execFileSync("npm", ["install", "--omit=dev", "--no-audit", "--no-fund", "--loglevel=error"], {
+const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+execFileSync(npmCmd, ["install", "--omit=dev", "--no-audit", "--no-fund", "--loglevel=error"], {
   cwd: bundle,
   stdio: "inherit",
+  shell: process.platform === "win32",
 });
 console.log("sidecar bundle ready:", bundle);
